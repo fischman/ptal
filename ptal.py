@@ -456,6 +456,12 @@ code, .mono { font-family: var(--mono); font-size: 12px; }
 #ftree input.rev { margin: 0 6px 0 0; vertical-align: -2px; accent-color: var(--accent); cursor: pointer; }
 #ftree tr.reviewed td.fcell { color: var(--dim); }
 #files .hdr button.small { padding: 0 6px; font-size: 11px; margin: 0 8px; }
+#files .progress { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; padding: 2px 8px 6px; font-size: 12px; color: var(--dim); }
+#files .progress .lbl { color: var(--dim); }
+#files .progress b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+#files .meter { display: inline-flex; gap: 6px; align-items: center; }
+#files .bar { display: inline-block; width: 72px; height: 7px; border-radius: 4px; background: var(--line); overflow: hidden; }
+#files .fill { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width .15s; }
 #files .hdr button.on { border-color: var(--accent); color: var(--accent); }
 .st { font-family: var(--mono); font-size: 11px; font-weight: 700; display: inline-block; min-width: 1.3em; text-align: center;
       border-radius: 3px; padding: 0 2px; margin-right: 5px; }
@@ -741,9 +747,10 @@ function renderFiles() {
   const adds = files.reduce((s, f) => s + f.adds, 0), dels = files.reduce((s, f) => s + f.dels, 0);
   const nrev = files.filter(isReviewed).length;
   box.append(el('div', { class: 'hdr' },
-    el('span', null, files.length + ' file' + (files.length === 1 ? '' : 's') + ' changed, ' + nrev + ' reviewed'),
+    el('span', null, files.length + ' file' + (files.length === 1 ? '' : 's') + ' changed'),
     el('button', { class: 'small' + (ui.unreviewedOnly ? ' on' : ''), title: 'Show only unreviewed files (u)', onclick: toggleUnreviewed }, ui.unreviewedOnly ? 'unreviewed only' : 'all files'),
     el('span', { class: 'stat' }, el('span', { class: 'a' }, '+' + adds), ' ', el('span', { class: 'd' }, '−' + dels))));
+  box.append(progressEl(nrev));
   const tbody = el('tbody');
   const shown = i => !(ui.unreviewedOnly && isReviewed(files[i]));
   (function walk(node, depth, hidden) {
@@ -784,6 +791,20 @@ function renderFiles() {
   if (ui.unreviewedOnly && nrev === files.length) box.append(el('div', { id: 'empty' }, 'Every file is marked reviewed.'));
 }
 function isReviewed(f) { return !!reviewed[fileKey(f)]; }
+// Progress: share of files reviewed, and share of diff lines (added + deleted,
+// text files only) in reviewed files, so big files weigh more.  Percentages
+// round, but 100% means complete and anything short of it reads at most 99%.
+function pct(n, d) { return !d ? 0 : n === d ? 100 : Math.min(99, Math.round(100 * n / d)); }
+function progressEl(nrev) {
+  const text = files.filter(f => !f.binary);
+  const weight = f => f.adds + f.dels;
+  const total = text.reduce((s, f) => s + weight(f), 0), done = text.filter(isReviewed).reduce((s, f) => s + weight(f), 0);
+  const meter = (label, n, d, unit) => el('span', { class: 'meter', title: n + ' of ' + d + ' ' + unit },
+    el('span', { class: 'bar' }, el('span', { class: 'fill', style: 'width:' + pct(n, d) + '%' })),
+    el('b', null, pct(n, d) + '%'), ' of ' + label);
+  return el('div', { class: 'progress', id: 'progress' }, el('span', { class: 'lbl' }, 'reviewed'), meter('files', nrev, files.length, 'files reviewed'),
+    total ? meter('lines', done, total, 'diff lines in reviewed files (binary files not counted)') : null);
+}
 function setReviewed(fi, on) {
   const k = fileKey(files[fi]);
   if (on) reviewed[k] = true; else delete reviewed[k];

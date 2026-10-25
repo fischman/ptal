@@ -174,7 +174,18 @@ with sync_playwright() as p:
     assert stored_rev == {k0: True}, stored_rev
     pg.locator('.file[data-fi="1"]').click(); pg.wait_for_timeout(100); pg.keyboard.press('r'); pg.wait_for_timeout(150)
     assert 'reviewed' in pg.locator('.file[data-fi="1"]').get_attribute('class')
-    assert ', 2 reviewed' in pg.locator('#files .hdr').inner_text()
+    # progress line: percentages of files and of diff lines (text files only) in reviewed files
+    def expect_progress(revidx):
+        nf = len(files); text = [f for f in files if not f['binary']]
+        tot = sum(f['adds'] + f['dels'] for f in text); done = sum(f['adds'] + f['dels'] for i, f in enumerate(files) if i in revidx and not f['binary'])
+        p = lambda n, d: 0 if not d else 100 if n == d else min(99, round(100 * n / d))
+        got = ' '.join(pg.locator('#progress').inner_text().split())
+        assert f"{p(len(revidx), nf)}% of files" in got, (got, revidx)
+        if tot: assert f"{p(done, tot)}% of lines" in got, (got, done, tot)
+        widths = pg.evaluate("[...document.querySelectorAll('#progress .fill')].map(e => e.style.width)")
+        assert widths[0] == f"{p(len(revidx), nf)}%", widths
+    expect_progress({0, 1})
+    print('progress after two reviewed:', pg.locator('#progress').inner_text())
     pg.keyboard.press('u'); pg.wait_for_timeout(150)
     assert all('hidden' in pg.locator(f'.file[data-fi="{i}"]').get_attribute('class') for i in (0, 1)), 'filter did not hide reviewed'
     assert 'unreviewed only' in pg.locator('#files .hdr button').inner_text()
@@ -186,6 +197,7 @@ with sync_playwright() as p:
     assert 'hidden' not in pg.locator('.file[data-fi="1"]').get_attribute('class')
     pg.locator('.file[data-fi="1"]').click(); pg.keyboard.press('r'); pg.wait_for_timeout(100); pg.locator('.file[data-fi="0"] input.rev').click(); pg.wait_for_timeout(100)
     assert pg.evaluate(f'JSON.parse(localStorage.getItem("ptal:{key}:reviewed"))') == {}
+    expect_progress(set()); assert '0% of files' in ' '.join(pg.locator('#progress').inner_text().split())
     print('reviewed checkbox / r / u filter / persistence OK')
     # images
     imgs = [i for i, f in enumerate(files) if f.get('image')]

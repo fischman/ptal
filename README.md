@@ -31,7 +31,10 @@ the same way.
   checkbox. Click a directory to collapse or expand it; click a file to open
   it. Navigating into a file inside a collapsed directory expands it. The
   "all files / unreviewed only" button (or `u`) hides reviewed files, and
-  `r` toggles the current file's checkbox. Drag the bar below the pane to resize it;
+  `r` toggles the current file's checkbox. A progress line above the tree
+  shows the percentage of files reviewed and the percentage of diff lines
+  (added plus deleted, text files only, so large files weigh more) that sit
+  in reviewed files; hover for the raw counts. Drag the bar below the pane to resize it;
   double-click it (or press `t`) to hide/show it.
 - **Bottom pane**: before (left) and after (right) of the selected file, row
   aligned, with changed words emphasised. Image files show the before and
