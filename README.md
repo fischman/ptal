@@ -1,5 +1,11 @@
 # Please Take a Look: a tool for making a per-commit single-file .html code-review page.
 
+## **CAVEAT**
+
+This was almost entirely written using LLMs. I (a human) have reviewed
+it for non-maliciousness, and it works well, but the code/prose is meh.
+
+## Overview
 `ptal.py` turns one git commit into one self-contained HTML file for reviewing
 The name is the reviewer's "please take a look": this makes the page you look at.
 in a desktop browser on a portrait screen. Python 3 standard library and git
