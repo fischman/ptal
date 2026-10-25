@@ -1,4 +1,4 @@
-# ptal — single-file commit review page
+# Please Take a Look: a tool for making a per-commit single-file .html code-review page.
 
 `ptal.py` turns one git commit into one self-contained HTML file for reviewing
 The name is the reviewer's "please take a look": this makes the page you look at.
