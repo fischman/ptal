@@ -55,6 +55,18 @@ the same way.
   line order, with jump links, per-comment delete, delete-all, "Copy as
   Markdown" and "Download JSON".
 
+## Example output
+
+A couple of example review pages, from the [AlarmingNotifications](https://github.com/fischman/AlarmingNotifications)
+repo: [1be143d](https://htmlpreview.github.io/?https://github.com/fischman/ptal/blob/main/examples/review-1be143d.html), [eda9419](https://htmlpreview.github.io/?https://github.com/fischman/ptal/blob/main/examples/review-eda9419.html).
+
+<details>
+<summary>Serving details</summary>
+These are served through https://htmlpreview.github.io/ just to get
+around GitHub's serving restrictions; in practice it is expected that
+review .html are used via local `file://` URLs.
+</details>
+
 ## Storage
 
 Everything lives in the browser's `localStorage`, under keys
