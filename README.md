@@ -103,7 +103,9 @@ The loop:
    resolves the commits to full hashes. A location in a commit that is not
    one of the snapshots renders as text without a link; a reply to an
    unknown id, or a note in such a commit, is listed separately in the
-   panel.
+   panel. The agent's own notes are threads like yours: they count as
+   unresolved until you tick them. Reply ids are `agent-<file name>-<n>`,
+   so keep each round's file name once resolved marks refer to it.
 3. Regenerate with `--then <new commit> --replies replies.json`. Replies
    appear threaded under the comments they answer, with a status badge and
    jump links into the follow-up commit. Tick **resolved** on each comment

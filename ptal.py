@@ -553,7 +553,7 @@ def load_replies(paths):
                 for x in item["fixedAt"]:
                     check_location(where + " fixedAt", x)
             r = dict(item)
-            r["id"] = "agent-%d-%d" % (n + 1, k + 1)
+            r["id"] = "agent-%s-%d" % (os.path.basename(path), k + 1)   # stable across reorderings of --replies
             r["author"] = "agent"
             r["source"] = os.path.basename(path)
             out.append(r)
@@ -1001,8 +1001,11 @@ function isNote(c) { return c.kind === 'note'; }
 function whoLabel(c) { return c.author === 'agent' ? 'agent' : isNote(c) ? 'note to self' : 'you'; }
 function whoClass(c) { return c.author === 'agent' ? 'agent' : isNote(c) ? 'note' : 'reviewer'; }
 function openNotes() { return sortedRoots().filter(c => isNote(c) && !isResolved(c)); }
-function countFor(fileKey) { return roots().filter(c => c.file === fileKey).length; }
-function openCountFor(fileKey) { return roots().filter(c => c.file === fileKey && !isResolved(c) && c.author === 'reviewer').length; }
+// Per file: unresolved and resolved threads (the agent's own notes included).
+function countsFor(fileKey) {
+  const rs = roots().filter(c => c.file === fileKey), done = rs.filter(isResolved).length;
+  return { open: rs.length - done, done };
+}
 
 // ---- rows & hunks ------------------------------------------------------------
 const rowCache = new Map();
@@ -1178,9 +1181,9 @@ function renderFiles() {
       }
       cell.append(base);
       if (f.modes[a] && f.modes[b] && f.modes[a] !== f.modes[b]) cell.append(el('span', { class: 'dir' }, ' ' + f.modes[a] + '→' + f.modes[b]));
-      const cnt = countFor(f.key), open = openCountFor(f.key);
+      const { open, done } = countsFor(f.key);
       if (open) cell.append(el('span', { class: 'badge open', title: open + ' unresolved comment' + (open === 1 ? '' : 's') }, open));
-      if (cnt - open) cell.append(el('span', { class: 'badge done', title: (cnt - open) + ' resolved' }, cnt - open));
+      if (done) cell.append(el('span', { class: 'badge done', title: done + ' resolved' }, done));
       const stat = el('td', { class: 'stat' });
       if (f.image && !hunksFor(f.shas[a], f.shas[b]).length) stat.append('image');
       else if (stats.binary) stat.append('binary');
@@ -1461,11 +1464,9 @@ function threadEl(root) {
   t.append(commentBox(root, false));
   for (const r of repliesTo(root.id)) t.append(commentBox(r, true));
   const foot = el('div', { class: 'tfoot' });
-  if (root.author === 'reviewer') {
-    const cb = el('input', { type: 'checkbox', class: 'res' }); cb.checked = isResolved(root);
-    cb.addEventListener('change', () => { openThreads.delete(root.id); setResolved(root.id, cb.checked); });
-    foot.append(el('label', null, cb, 'resolved'));
-  }
+  const cb = el('input', { type: 'checkbox', class: 'res' }); cb.checked = isResolved(root);
+  cb.addEventListener('change', () => { openThreads.delete(root.id); setResolved(root.id, cb.checked); });
+  foot.append(el('label', null, cb, 'resolved'));
   foot.append(el('a', { onclick: () => openEditor(t, { file: root.file, snap: root.snap, line: root.line, src: root.src }, null, null, root) }, 'reply'));
   if (isResolved(root)) foot.append(el('a', { onclick: () => { openThreads.delete(root.id); t.replaceWith(threadEl(root)); } }, 'collapse'));
   if (root.file != null && M > 2 && root.snap != null) {
@@ -1497,7 +1498,7 @@ function rerenderAll() {
   updateBadge();
 }
 function updateBadge() {
-  const n = comments.length, open = roots().filter(c => c.author === 'reviewer' && !isResolved(c)).length;
+  const n = comments.length, open = roots().filter(c => !isResolved(c)).length;
   $('#btn-comments').textContent = 'Comments' + (n ? ' (' + n + ')' : '');
   $('#btn-comments').title = open + ' unresolved (C)';
 }
@@ -1545,11 +1546,10 @@ function renderPanel() {
     const loc = el('div', { class: 'loc' }, el('a', { onclick: () => jumpTo(cm) }, locText(cm)),
       el('span', { class: 'who ' + whoClass(cm) }, isNote(cm) ? 'note to self' : cm.author), statusEl(cm.status),
       el('span', { class: 'when' }, cm.created ? fmtDate(cm.updated || cm.created) : ''), el('span', { style: 'flex:1 1 auto' }));
-    if (cm.author === 'reviewer') {
-      const cb = el('input', { type: 'checkbox', class: 'res' }); cb.checked = isResolved(cm);
-      cb.addEventListener('change', () => setResolved(cm.id, cb.checked));
-      loc.append(el('label', null, cb, 'resolved'), el('button', { class: 'danger', onclick: () => deleteComment(cm.id) }, 'delete'));
-    }
+    const cb = el('input', { type: 'checkbox', class: 'res' }); cb.checked = isResolved(cm);
+    cb.addEventListener('change', () => setResolved(cm.id, cb.checked));
+    loc.append(el('label', null, cb, 'resolved'));
+    if (cm.author === 'reviewer') loc.append(el('button', { class: 'danger', onclick: () => deleteComment(cm.id) }, 'delete'));
     pc.append(loc);
     if (cm.src) pc.append(el('div', { class: 'src' }, cm.src));
     pc.append(el('div', { class: 'txt' }, cm.text));

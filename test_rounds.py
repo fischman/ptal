@@ -92,6 +92,16 @@ with sync_playwright() as p:
     arow = pg.locator('#ftree tr.file', has_text='a.txt')      # a.txt: c1 resolved (grey), c2 + n1 + L1 + L2 open (red); b.txt: c5 resolved only
     assert [b.inner_text() for b in arow.locator('.badge').all()] == ['4', '1'] and arow.locator('.badge.open').count() == 1 and arow.locator('.badge.done').get_attribute('title') == '1 resolved'
     brow = pg.locator('#ftree tr.file', has_text='b.txt'); assert brow.locator('.badge.open').count() == 0 and brow.locator('.badge.done').inner_text() == '1'
+    pg.locator('#viewsel').select_option('1-2'); pg.wait_for_timeout(200)
+    erow = pg.locator('#ftree tr.file', has_text='e.txt')      # only the agent's own note: unresolved until ticked, like any thread
+    assert [(b.get_attribute('class'), b.inner_text()) for b in erow.locator('.badge').all()] == [('badge open', '1')], erow.inner_text()
+    pg.keyboard.press('Escape'); erow.click(); pg.wait_for_timeout(200)                  # panel closed for the click
+    ath = pg.locator('#bottom .thread[data-root="agent-replies.json-6"]'); assert ath.count() == 1 and 'helper' in txt(ath), ath.count()
+    ath.locator('input.res').click(); pg.wait_for_timeout(200)
+    assert [(b.get_attribute('class'), b.inner_text()) for b in erow.locator('.badge').all()] == [('badge done', '1')]
+    assert pg.locator('#bottom .thread.collapsed[data-root="agent-replies.json-6"]').count() == 1
+    assert pg.evaluate(f'JSON.parse(localStorage.getItem("ptal:{key}:resolved"))')['agent-replies.json-6'] is True
+    pg.locator('#viewsel').select_option('0-1'); pg.keyboard.press('C'); pg.wait_for_timeout(200)
     pg.locator('#pfilter button[data-filter="all"]').click(); pg.wait_for_timeout(100)
     pg.screenshot(path=f'{shots}/03-panel.png')
     # brief: unresolved reviewer comments only, with ids, snapshot hashes, context and existing replies
@@ -153,7 +163,7 @@ with sync_playwright() as p:
     print('reply thread OK')
     # JSON export carries snaps and resolved
     exp = pg.evaluate('''() => { const o = URL.createObjectURL; let t = null; URL.createObjectURL = b => { t = b; return 'blob:x'; }; document.getElementById('btn-json').click(); URL.createObjectURL = o; return t ? t.text() : null; }''')
-    exp = json.loads(exp); assert exp['snaps'] == [s['sha'] for s in data['snaps']] and exp['resolved'] == {'c5': True, 'c1': True, 'n1': True} and len(exp['comments']) == 11
+    exp = json.loads(exp); assert exp['snaps'] == [s['sha'] for s in data['snaps']] and exp['resolved'] == {'c5': True, 'c1': True, 'agent-replies.json-6': True, 'n1': True} and len(exp['comments']) == 11
     b.close()
 print('console errors/warnings:', errors)
 assert not errors
