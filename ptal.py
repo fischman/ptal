@@ -701,6 +701,8 @@ code, .mono { font-family: var(--mono); font-size: 12px; }
             padding: 4px 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; }
 #filehead .p { font-family: var(--mono); flex: 1 1 auto; overflow-wrap: anywhere; }
 #filehead .hk { color: var(--dim); white-space: nowrap; }
+#elsewhere { font-size: 12px; color: var(--dim); padding: 3px 8px; background: var(--chg); border-bottom: 1px solid var(--line); }
+#elsewhere a { cursor: pointer; color: var(--agentb); margin-left: 6px; }
 #filehead .vw { color: var(--dim); white-space: nowrap; font-family: var(--mono); }
 #empty { padding: 24px; color: var(--dim); text-align: center; }
 #empty kbd { font-family: var(--mono); background: var(--btn); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
@@ -1001,10 +1003,13 @@ function isNote(c) { return c.kind === 'note'; }
 function whoLabel(c) { return c.author === 'agent' ? 'agent' : isNote(c) ? 'note to self' : 'you'; }
 function whoClass(c) { return c.author === 'agent' ? 'agent' : isNote(c) ? 'note' : 'reviewer'; }
 function openNotes() { return sortedRoots().filter(c => isNote(c) && !isResolved(c)); }
-// Per file: unresolved and resolved threads (the agent's own notes included).
+// Per file, across all snapshots: unresolved and resolved threads (the agent's
+// own notes included), each with a breakdown by snapshot for the tooltip.
 function countsFor(fileKey) {
-  const rs = roots().filter(c => c.file === fileKey), done = rs.filter(isResolved).length;
-  return { open: rs.length - done, done };
+  const rs = roots().filter(c => c.file === fileKey);
+  const by = list => { const n = {}; for (const c of list) n[c.snap] = (n[c.snap] || 0) + 1; return Object.keys(n).map(k => n[k] + ' at S' + k).join(', '); };
+  const done = rs.filter(isResolved), open = rs.filter(c => !isResolved(c));
+  return { open: open.length, done: done.length, openBy: by(open), doneBy: by(done) };
 }
 
 // ---- rows & hunks ------------------------------------------------------------
@@ -1181,9 +1186,9 @@ function renderFiles() {
       }
       cell.append(base);
       if (f.modes[a] && f.modes[b] && f.modes[a] !== f.modes[b]) cell.append(el('span', { class: 'dir' }, ' ' + f.modes[a] + '→' + f.modes[b]));
-      const { open, done } = countsFor(f.key);
-      if (open) cell.append(el('span', { class: 'badge open', title: open + ' unresolved comment' + (open === 1 ? '' : 's') }, open));
-      if (done) cell.append(el('span', { class: 'badge done', title: done + ' resolved' }, done));
+      const { open, done, openBy, doneBy } = countsFor(f.key);
+      if (open) cell.append(el('span', { class: 'badge open', title: open + ' unresolved thread' + (open === 1 ? '' : 's') + ' (' + openBy + ')' }, open));
+      if (done) cell.append(el('span', { class: 'badge done', title: done + ' resolved (' + doneBy + ')' }, done));
       const stat = el('td', { class: 'stat' });
       if (f.image && !hunksFor(f.shas[a], f.shas[b]).length) stat.append('image');
       else if (stats.binary) stat.append('binary');
@@ -1253,6 +1258,23 @@ function renderDiff() {
     el('button', { onclick: () => { ui.wrap = !ui.wrap; saveUI(); renderDiff(); }, title: 'Toggle wrapping (w)' }, ui.wrap ? 'wrap' : 'no wrap'),
     el('button', { onclick: expandAll, title: 'Expand folded regions (x)' }, 'expand'));
   bottom.append(head);
+  const hidden = roots().filter(c => c.file === f.key && c.snap != null && c.snap !== a && c.snap !== b);
+  if (hidden.length) {
+    const box = el('div', { id: 'elsewhere' });
+    for (let k = 0; k < M; k++) {
+      const ts = hidden.filter(c => c.snap === k).sort((x, y) => x.line - y.line);
+      if (!ts.length) continue;
+      const open = ts.filter(c => !isResolved(c)).length;
+      const part = el('span', null, (open ? open + ' open' : '') + (open && open < ts.length ? ' and ' : '') + (ts.length - open ? (ts.length - open) + ' resolved' : '')
+        + ' thread' + (ts.length === 1 ? '' : 's') + ' at S' + k + ', not shown in this view:');
+      const first = ts.find(c => !isResolved(c)) || ts[0];
+      for (const [i, j] of pairs()) if (i === k || j === k)
+        part.append(el('a', { onclick: () => { setView(i, j); showLine(f.key, k, first.line, first.id); } }, 'show S' + i + ' → S' + j));
+      box.append(part, el('br'));
+    }
+    box.lastChild.remove();
+    bottom.append(box);
+  }
   const binary = isBinaryAt(f, a) || isBinaryAt(f, b);
   if (f.image) {
     const side = (k, label) => { const s = f.shas[k], bl = s ? blobs[s] : null; return el('div', { class: 'img' },

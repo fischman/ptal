@@ -76,6 +76,16 @@ with sync_playwright() as p:
     names = [t.strip() for t in pg.locator('#ftree tr.file:not(.hidden) td.fcell').all_inner_texts()]
     assert any('d.txt' in n for n in names) and not any('c.txt' in n for n in names) and any('b.txt' in n for n in names), names   # net: d.txt is simply added, b changed in round 1
     pg.screenshot(path=f'{shots}/02-net-view.png')
+    # in the net view S1 threads are not rendered: the header says where they are, and the link leads there
+    pg.locator('#ftree tr.file', has_text='a.txt').click(); pg.wait_for_timeout(200)
+    assert pg.locator('#bottom .thread[data-root="c1"]').count() == 0
+    ew = pg.locator('#elsewhere'); assert ew.count() == 1 and '3 open threads at S1, not shown in this view:' in txt(ew), txt(ew)   # c1, n1, L2
+    assert [a.inner_text() for a in ew.locator('a').all()] == ['show S0 → S1', 'show S1 → S2'], txt(ew)
+    assert pg.locator('#ftree tr.file', has_text='a.txt').locator('.badge.open').get_attribute('title') == '5 unresolved threads (2 at S0, 3 at S1)'
+    ew.locator('a', has_text='show S1 → S2').click(); pg.wait_for_timeout(300)
+    assert pg.locator('#viewsel').input_value() == '1-2' and pg.locator('#bottom .thread[data-root="c1"]').count() == 1
+    assert '2 open threads at S0, not shown in this view:' in txt(pg.locator('#elsewhere')), txt(pg.locator('#elsewhere'))   # c2, L1 are at S0
+    pg.locator('#viewsel').select_option('0-2'); pg.wait_for_timeout(200)
     print('net view OK')
     # panel: filters and resolve
     pg.keyboard.press('C'); pg.wait_for_timeout(200)
@@ -90,7 +100,7 @@ with sync_playwright() as p:
     assert pg.locator('#panel .pc[data-id="c1"]').count() == 0      # filtered out once resolved
     assert pg.evaluate(f'JSON.parse(localStorage.getItem("ptal:{key}:resolved"))') == {'c5': True, 'c1': True}
     arow = pg.locator('#ftree tr.file', has_text='a.txt')      # a.txt: c1 resolved (grey), c2 + n1 + L1 + L2 open (red); b.txt: c5 resolved only
-    assert [b.inner_text() for b in arow.locator('.badge').all()] == ['4', '1'] and arow.locator('.badge.open').count() == 1 and arow.locator('.badge.done').get_attribute('title') == '1 resolved'
+    assert [b.inner_text() for b in arow.locator('.badge').all()] == ['4', '1'] and arow.locator('.badge.open').count() == 1 and arow.locator('.badge.done').get_attribute('title') == '1 resolved (1 at S1)'
     brow = pg.locator('#ftree tr.file', has_text='b.txt'); assert brow.locator('.badge.open').count() == 0 and brow.locator('.badge.done').inner_text() == '1'
     pg.locator('#viewsel').select_option('1-2'); pg.wait_for_timeout(200)
     erow = pg.locator('#ftree tr.file', has_text='e.txt')      # only the agent's own note: unresolved until ticked, like any thread
