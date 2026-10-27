@@ -71,7 +71,7 @@ def commit_info(root, committish):
         "committer": v[6], "committerEmail": v[7], "commitDate": v[8],
         "refs": v[9], "subject": v[10], "body": v[11].rstrip("\n"),
         "base": parents[0] if parents else EMPTY_TREE,
-        "root": os.path.abspath(root),
+        "root": root,   # as given, so the brief's command works for whoever runs it
     }
 
 
@@ -1600,7 +1600,7 @@ function brief() {
   const c = DATA.commit, last = SN[M - 1];
   const rs = sortedRoots().filter(r => r.author === 'reviewer' && !isResolved(r) && !isNote(r));
   const out = ['# Code review of commit ' + c.short + ': ' + c.subject, '',
-    'A human reviewer has read commit ' + c.sha + ' in the git repository at `' + c.root + '`' + (M > 2 ? ', together with the follow-up commit' + (M > 3 ? 's' : '') + ' listed below,' : '') + ' and left comments on specific lines. Your job is to act on each comment: change the code in a new commit, or explain why not. You answer in a JSON file, which the reviewer feeds back into the review page together with your commit, so your replies and the places you changed appear next to the comments they answer.',
+    'A human reviewer has read commit ' + c.sha + (M > 2 ? ', together with the follow-up commit' + (M > 3 ? 's' : '') + ' listed below,' : '') + ' and left comments on specific lines. Your job is to act on each comment: change the code in a new commit, or explain why not. You answer in a JSON file, which the reviewer feeds back into the review page together with your commit, so your replies and the places you changed appear next to the comments they answer.',
     '', 'The review is a sequence of snapshots of the repository:', ''];
   SN.forEach((s, k) => out.push('- S' + k + ' = ' + s.sha + (k === 0 ? ' (parent of the reviewed commit)' : k === 1 ? ' (the reviewed commit)' : ' (follow-up ' + (k - 1) + ')') + (s.subject ? ': ' + s.subject : '')));
   out.push('', '## How to respond', '',
