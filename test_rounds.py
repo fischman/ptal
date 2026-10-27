@@ -89,6 +89,9 @@ with sync_playwright() as p:
     pg.locator('#panel .pc[data-id="c1"] input.res').click(); pg.wait_for_timeout(150)
     assert pg.locator('#panel .pc[data-id="c1"]').count() == 0      # filtered out once resolved
     assert pg.evaluate(f'JSON.parse(localStorage.getItem("ptal:{key}:resolved"))') == {'c5': True, 'c1': True}
+    arow = pg.locator('#ftree tr.file', has_text='a.txt')      # a.txt: c1 resolved (grey), c2 + n1 + L1 + L2 open (red); b.txt: c5 resolved only
+    assert [b.inner_text() for b in arow.locator('.badge').all()] == ['4', '1'] and arow.locator('.badge.open').count() == 1 and arow.locator('.badge.done').get_attribute('title') == '1 resolved'
+    brow = pg.locator('#ftree tr.file', has_text='b.txt'); assert brow.locator('.badge.open').count() == 0 and brow.locator('.badge.done').inner_text() == '1'
     pg.locator('#pfilter button[data-filter="all"]').click(); pg.wait_for_timeout(100)
     pg.screenshot(path=f'{shots}/03-panel.png')
     # brief: unresolved reviewer comments only, with ids, snapshot hashes, context and existing replies

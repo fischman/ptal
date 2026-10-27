@@ -686,8 +686,9 @@ code, .mono { font-family: var(--mono); font-size: 12px; }
 .fcell .dir { color: var(--dim); }
 .stat .a { color: #1a7f37; } .stat .d { color: #cf222e; }
 @media (prefers-color-scheme: dark) { .stat .a { color: #3fb950; } .stat .d { color: #f85149; } }
-.badge { font-size: 11px; font-family: system-ui, sans-serif; background: var(--cmtb); color: #000; border-radius: 8px; padding: 0 6px; margin-left: 6px; }
-.badge.open { background: var(--del2); }
+.badge { font-size: 11px; font-family: system-ui, sans-serif; border-radius: 8px; padding: 0 6px; margin-left: 6px; }
+.badge.open { background: var(--del2); color: #000; }
+.badge.done { background: var(--line); color: var(--dim); }
 .images { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; border-bottom: 1px solid var(--line); }
 .images .img { text-align: center; font-size: 11px; color: var(--dim); min-width: 0; }
 .images img { max-width: 100%; height: auto; display: block; margin: 0 auto 4px;
@@ -1178,7 +1179,8 @@ function renderFiles() {
       cell.append(base);
       if (f.modes[a] && f.modes[b] && f.modes[a] !== f.modes[b]) cell.append(el('span', { class: 'dir' }, ' ' + f.modes[a] + '→' + f.modes[b]));
       const cnt = countFor(f.key), open = openCountFor(f.key);
-      if (cnt) cell.append(el('span', { class: 'badge' + (open ? ' open' : ''), title: open + ' unresolved of ' + cnt }, cnt));
+      if (open) cell.append(el('span', { class: 'badge open', title: open + ' unresolved comment' + (open === 1 ? '' : 's') }, open));
+      if (cnt - open) cell.append(el('span', { class: 'badge done', title: (cnt - open) + ' resolved' }, cnt - open));
       const stat = el('td', { class: 'stat' });
       if (f.image && !hunksFor(f.shas[a], f.shas[b]).length) stat.append('image');
       else if (stats.binary) stat.append('binary');
