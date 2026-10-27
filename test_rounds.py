@@ -116,7 +116,7 @@ with sync_playwright() as p:
     pg.screenshot(path=f'{shots}/03-panel.png')
     # brief: unresolved reviewer comments only, with ids, snapshot hashes, context and existing replies
     brief = pg.evaluate('''() => { let t=''; navigator.clipboard.writeText = s => { t=s; return Promise.resolve(); }; document.getElementById('btn-brief').click(); return t; }''')
-    assert 'git rev-parse HEAD` must print `' + data['snaps'][2]['sha'] in brief and '--then ' + data['snaps'][2]['sha'] + ' --replies replies.json --then <your commit> --replies <your replies file>' in brief and 'amend' in brief
+    assert 'git rev-parse HEAD` must print `' + data['snaps'][2]['sha'] in brief and '--then ' + data['snaps'][2]['sha'] + ' --replies replies.json --then <your commit> --replies replies-c362365-3.json' in brief and 'Write `replies-c362365-3.json`' in brief and 'amend' in brief
     blocks = re.findall(r'```json\n(.*?)\n```', brief, re.S); assert len(blocks) == 2, len(blocks)
     schema, cj = json.loads(blocks[0]), json.loads(blocks[1])
     assert schema == data['replySchema'] and schema['$defs']['reply']['properties']['status']['enum'] == ['fixed', 'answered', 'declined', 'deferred']

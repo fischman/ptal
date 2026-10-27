@@ -1640,7 +1640,7 @@ function briefComment(cm) {
   return o;
 }
 function brief() {
-  const c = DATA.commit, last = SN[M - 1];
+  const c = DATA.commit, last = SN[M - 1], rf = 'replies-' + c.short + '-' + M + '.json';   // one file per round, never overwritten
   const rs = sortedRoots().filter(r => r.author === 'reviewer' && !isResolved(r) && !isNote(r));
   const out = ['# Code review of commit ' + c.short + ': ' + c.subject, '',
     'A human reviewer has read commit ' + c.sha + (M > 2 ? ', together with the follow-up commit' + (M > 3 ? 's' : '') + ' listed below,' : '') + ' and left comments on specific lines. Your job is to act on each comment: change the code in a new commit, or explain why not. You answer in a JSON file, which the reviewer feeds back into the review page together with your commit, so your replies and the places you changed appear next to the comments they answer.',
@@ -1649,10 +1649,10 @@ function brief() {
   out.push('', '## How to respond', '',
     '1. Verify that the currently checked-out branch is at S' + (M - 1) + ': `git rev-parse HEAD` must print `' + last.sha + '`. If it does not, stop and ask the reviewer. Make your changes as one or more new commits on that branch. Never amend, rebase or reset existing commits.',
     '2. Address every comment in the JSON at the end of this brief. Each comment has an `id`, the full hash of the `commit` it was made against, and a location: `path` and `line` in a file at that commit; or `messageLine`, a 1-based line of that commit\'s message as `git show -s --format=%B` prints it (line 1 is the subject); or neither, for the commit as a whole. `context` holds nearby lines of the file or message, keyed by line number. `text` is the reviewer\'s comment and `replies` are the earlier answers in that thread, oldest first, including yours from previous rounds.',
-    '3. Write `replies.json` with one entry per comment: `re` is the comment\'s id, `status` is one of fixed, answered, declined or deferred, and `text` says what you changed or why not. When the status is fixed, add `fixedAt`: one or more locations of the fix, each a full `commit` hash (your new commit), a `file` path and a `line` in that file at that commit. An entry with `at` instead of `re` is a note of your own about a location. The file must validate against this JSON schema:', '',
+    '3. Write `' + rf + '` (exactly that name: it is specific to this round, and an earlier round\'s file must not be overwritten) with one entry per comment: `re` is the comment\'s id, `status` is one of fixed, answered, declined or deferred, and `text` says what you changed or why not. When the status is fixed, add `fixedAt`: one or more locations of the fix, each a full `commit` hash (your new commit), a `file` path and a `line` in that file at that commit. An entry with `at` instead of `re` is a note of your own about a location. The file must validate against this JSON schema:', '',
     '```json', JSON.stringify(DATA.replySchema), '```', '',
-    '4. Hand back the hash(es) of your new commit(s) and `replies.json`. The reviewer then runs:', '',
-    '   `ptal.py ' + c.root + ' ' + c.sha + (M > 2 ? SN.slice(2).map(s => ' --then ' + s.sha).join('') : '') + (DATA.replyFiles || []).map(p => ' --replies ' + p).join('') + ' --then <your commit> --replies <your replies file>`', '',
+    '4. Hand back the hash(es) of your new commit(s) and `' + rf + '`. The reviewer then runs:', '',
+    '   `ptal.py ' + c.root + ' ' + c.sha + (M > 2 ? SN.slice(2).map(s => ' --then ' + s.sha).join('') : '') + (DATA.replyFiles || []).map(p => ' --replies ' + p).join('') + ' --then <your commit> --replies ' + rf + '`', '',
     '## Comments (' + rs.length + ' unresolved)', '',
     '```json', JSON.stringify({ comments: rs.map(briefComment) }, null, 1), '```', '');
   return out.join('\n');
