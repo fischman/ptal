@@ -89,7 +89,8 @@ The loop:
    and earlier replies in the thread).
 2. Give the brief to a coding agent. It checks that the current branch is
    at the newest snapshot, makes one or more new commits on it (never
-   amending or rebasing) and writes `replies.json`:
+   amending or rebasing) and writes the reply file the brief names,
+   `replies-<short hash>-<round>.json`, one per round:
 
        {"replies": [
          {"re": "<comment id>", "status": "fixed", "text": "what changed",
@@ -106,7 +107,7 @@ The loop:
    panel. The agent's own notes are threads like yours: they count as
    unresolved until you tick them. Reply ids are `agent-<file name>-<n>`,
    so keep each round's file name once resolved marks refer to it.
-3. Regenerate with `--then <new commit> --replies replies.json`. Replies
+3. Regenerate with `--then <new commit> --replies <that file>`. Replies
    appear threaded under the comments they answer, with a status badge and
    jump links into the follow-up commit. Tick **resolved** on each comment
    you accept; the panel filters all / unresolved / resolved, and the next
@@ -114,8 +115,9 @@ The loop:
    thread from the page to carry a rebuttal into the next round.
 4. Repeat with more `--then` commits and reply files as needed. Replies
    are embedded in the page, not stored by the browser, so every
-   regeneration takes every reply file so far: `--then A --replies a.json
-   --then B --replies b.json`. The brief's command already lists them.
+   regeneration takes every reply file so far: `--then A --replies
+   replies-abc1234-2.json --then B --replies replies-abc1234-3.json`. The
+   brief's command already lists them.
 
 A **note to self** is a comment the agent never sees: tick the box in
 the comment editor, or press `N` instead of `c`. Notes are left out of the
