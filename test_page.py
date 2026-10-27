@@ -11,7 +11,18 @@ page_path = os.path.abspath(sys.argv[1]); shots = sys.argv[2]
 os.makedirs(shots, exist_ok=True)
 html = open(page_path).read()
 data = json.loads(re.search(r'<script type="application/json" id="data">(.*?)</script>', html, re.S).group(1))
-key = data['commit']['short']; files = data['files']
+key = data['commit']['short']
+def v01(f):
+    # the S0->S1 view of a file record, in the shape the single-commit pages used
+    sa, sb = f['shas'][0], f['shas'][1]; ba = data['blobs'].get(sa) if sa else None; bb = data['blobs'].get(sb) if sb else None
+    hunks = [] if sa == sb else data['hunks'].get((sa or '') + ':' + (sb or ''), [])
+    return {'path': f['paths'][1] or f['paths'][0], 'oldPath': f['paths'][0] or f['paths'][1], 'key': f['key'],
+            'status': 'A' if not sa else 'D' if not sb else 'R' if f['paths'][0] != f['paths'][1] else 'M',
+            'binary': bool((ba and ba['binary']) or (bb and bb['binary'])), 'hunks': hunks,
+            'adds': sum(h['nc'] for h in hunks), 'dels': sum(h['oc'] for h in hunks),
+            'old': (ba or {}).get('lines') or [], 'new': (bb or {}).get('lines') or [],
+            'image': f.get('image'), 'oldImg': (ba or {}).get('img'), 'newImg': (bb or {}).get('img'), 'imageNote': f.get('imageNote', '')}
+files = [v01(f) for f in data['files'] if f['shas'][0] != f['shas'][1] or f['paths'][0] != f['paths'][1]]
 errors = []
 with sync_playwright() as p:
     b = p.chromium.launch()
@@ -92,7 +103,7 @@ with sync_playwright() as p:
       pg.screenshot(path=f'{shots}/06-panel.png')
       md = pg.evaluate('''() => { let t=''; const o=navigator.clipboard.writeText; navigator.clipboard.writeText = s => { t=s; return Promise.resolve(); }; document.getElementById('btn-copy').click(); return t; }''')
       print('markdown export:\n' + md)
-      assert md.startswith('# Review of ') and ('old:' in md or 'new:' in md)
+      assert md.startswith('# Review of ') and ('S0:' in md or 'S1:' in md)
       # delete one from panel
       pg.locator('#panel .pc button', has_text='delete').first.click(); pg.wait_for_timeout(200)
       assert pg.locator('#panel .pc').count() == n_inline + 1
@@ -170,7 +181,7 @@ with sync_playwright() as p:
     assert 'reviewed' in pg.locator('.file[data-fi="0"]').get_attribute('class')
     assert int(pg.locator('.file.sel').get_attribute('data-fi') or -1) != 0 or True   # clicking the box must not open the file
     stored_rev = pg.evaluate(f'JSON.parse(localStorage.getItem("ptal:{key}:reviewed"))')
-    k0 = files[0]['oldPath'] if files[0]['status'] == 'D' else files[0]['path']
+    k0 = files[0]['key']
     assert stored_rev == {k0: True}, stored_rev
     pg.locator('.file[data-fi="1"]').click(); pg.wait_for_timeout(100); pg.keyboard.press('r'); pg.wait_for_timeout(150)
     assert 'reviewed' in pg.locator('.file[data-fi="1"]').get_attribute('class')

@@ -11,12 +11,13 @@ The name is the reviewer's "please take a look": this makes the page you look at
 in a desktop browser on a portrait screen. Python 3 standard library and git
 only; no network access from the page.
 
-    ./ptal.py GIT_ROOT COMMITTISH [-o OUT.html]
+    ./ptal.py GIT_ROOT COMMITTISH [--then COMMITTISH]... [--replies FILE]... [--comments FILE] [-o OUT.html]
 
 `GIT_ROOT` is anything `git -C` accepts. The default output is
 `review-<short sha>.html` in the current directory; `-o -` writes to stdout.
 A merge commit is compared with its first parent, a root commit with the
-empty tree. Renames and copies are detected (`-M -C`). Image files (png,
+empty tree. Each `--then` adds a follow-up commit as another snapshot (see
+"Rounds" below). Renames and copies are detected (`-M -C`). Image files (png,
 jpeg, gif, webp, svg, bmp, ico, avif) are embedded as data URIs, up to 10 MB
 a side. Android vector drawables (`<vector>` XML: paths, groups with
 transforms, clip paths, gradients, tint) are converted to SVG and embedded
@@ -67,11 +68,69 @@ around GitHub's serving restrictions; in practice it is expected that
 review .html are used via local `file://` URLs.
 </details>
 
+## Rounds: getting comments addressed
+
+The review is a sequence of snapshots: S0 is the parent, S1 the reviewed
+commit, and every `--then COMMIT` adds S2, S3, ... Every file that changed
+in any step is embedded at every snapshot, so the page can show the diff
+between any two of them: the selector above the file list (or `v`) offers
+each round, the net change, and every other pair. A comment belongs to the
+snapshot, file and line it was made on, so it never goes stale; it shows in
+every view that includes its snapshot, with "where did this line go" links
+to each later snapshot (same line, moved line, or "changed here").
+
+The loop:
+
+1. Review S1, leave comments, open the comments panel and press **Copy
+   brief for agent**. The brief is Markdown: the snapshots, instructions,
+   the JSON schema of the reply file, and every unresolved comment as JSON
+   (id, the full hash of the commit it was made against, `path` and `line`
+   or `messageLine`, a few lines of context keyed by line number, the text,
+   and earlier replies in the thread).
+2. Give the brief to a coding agent. It checks that the current branch is
+   at the newest snapshot, makes one or more new commits on it (never
+   amending or rebasing) and writes `replies.json`:
+
+       {"replies": [
+         {"re": "<comment id>", "status": "fixed", "text": "what changed",
+          "fixedAt": [{"commit": "<full hash>", "file": "path", "line": 12}]},
+         {"re": "<comment id>", "status": "answered" | "declined" | "deferred", "text": "..."},
+         {"at": {"commit": "<full hash>", "file": "path", "line": 7}, "text": "an unprompted note"}
+       ]}
+
+   Every location names a commit, so its file and line are unambiguous;
+   `ptal.py` checks the file against the schema (`REPLY_SCHEMA`) and
+   resolves the commits to full hashes. A location in a commit that is not
+   one of the snapshots renders as text without a link; a reply to an
+   unknown id, or a note in such a commit, is listed separately in the
+   panel.
+3. Regenerate with `--then <new commit> --replies replies.json`. Replies
+   appear threaded under the comments they answer, with a status badge and
+   jump links into the follow-up commit. Tick **resolved** on each comment
+   you accept; the panel filters all / unresolved / resolved, and the next
+   brief contains only unresolved threads, with their history. Reply to a
+   thread from the page to carry a rebuttal into the next round.
+4. Repeat with more `--then` commits and reply files as needed.
+
+A **note to self** is a comment the agent never sees: tick the box in
+the comment editor, or press `N` instead of `c`. Notes are left out of the
+brief, listed under their own heading in the Markdown copy, and shown in a
+box at the top of the commit pane until resolved, so they survive any number
+of regenerations with further `--then` and `--replies`. The panel has a
+"notes to self" filter. Editing a note and unticking the box turns it into
+an ordinary comment for the next brief.
+
+`--comments FILE` seeds the page with a comments export (the panel's
+**Download JSON**) for use in another browser; records already present are
+kept. Reviewed marks are per view, so files touched in a round come back
+unreviewed for that round.
+
 ## Storage
 
 Everything lives in the browser's `localStorage`, under keys
-`ptal:<short hash>:comments`, `ptal:<short hash>:reviewed` and
-`ptal:<short hash>:ui`, where the short hash
+`ptal:<short hash>:comments`, `ptal:<short hash>:resolved`,
+`ptal:<short hash>:reviewed` (the S0 to S1 view; other views use
+`reviewed:<a>-<b>`) and `ptal:<short hash>:ui`, where the short hash
 is the commit's abbreviated hash as `git show --format=%h` prints it. Files
 opened from `file://` URLs all share one origin, so the prefix keeps reviews
 of different commits apart, while a page regenerated for the same commit
@@ -79,6 +138,9 @@ of different commits apart, while a page regenerated for the same commit
 
 ## Testing
 
+`test_rounds.py` drives a three-snapshot page made with `--then`,
+`--replies` and `--comments` (seeded and legacy-format comments, threaded
+replies, line mapping, view switching, resolve marks, the brief).
 `test_page.py` drives a generated page in headless Chromium (keys, comments,
 persistence across reload, the panel, folds, wrap, the directory tree, the
 stat column, images, binary/added/deleted files) and asserts no console
