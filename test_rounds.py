@@ -125,6 +125,17 @@ with sync_playwright() as p:
     assert pg.locator('tr.flash .thread[data-root="n1"], tr.flash + tr .thread[data-root="n1"]').count() == 1 or pg.locator('#bottom .thread[data-root="n1"]').count() == 1
     pg.locator('#bottom .thread[data-root="n1"] input.res').click(); pg.wait_for_timeout(200)
     assert '1 open note to self' in txt(pg.locator('#notes')) and 'typed note' in txt(pg.locator('#notes'))
+    # a resolved thread collapses to one line; click expands it, "collapse" folds it again, unticking reopens it
+    col = pg.locator('#bottom .thread.collapsed[data-root="n1"]'); assert col.count() == 1 and 'note to self: remind me: check line three' in txt(col) and 'second line' not in txt(col), txt(col)
+    col.locator('.sum').click(); pg.wait_for_timeout(100)
+    full = pg.locator('#bottom .thread[data-root="n1"]:not(.collapsed)'); assert full.count() == 1 and 'second line of the note' in txt(full)
+    full.locator('.tfoot a', has_text='collapse').click(); pg.wait_for_timeout(100)
+    assert pg.locator('#bottom .thread.collapsed[data-root="n1"]').count() == 1
+    pg.locator('#bottom .thread.collapsed[data-root="n1"] input.res').click(); pg.wait_for_timeout(200)
+    assert pg.locator('#bottom .thread.collapsed[data-root="n1"]').count() == 0 and '2 open notes to self' in txt(pg.locator('#notes'))
+    pg.locator('#bottom .thread[data-root="n1"] input.res').click(); pg.wait_for_timeout(200)       # resolve again for the checks below
+    assert pg.locator('#bottom .thread.collapsed[data-root="c1"]').count() == 1 and '1 reply' in txt(pg.locator('#bottom .thread.collapsed[data-root="c1"]'))
+    print('collapsed resolved threads OK')
     pg.screenshot(path=f'{shots}/03b-notes.png')
     print('notes to self OK')
     pg.keyboard.press('C'); pg.wait_for_timeout(200)                                        # the panel back open for the steps below

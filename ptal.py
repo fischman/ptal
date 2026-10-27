@@ -741,6 +741,11 @@ tr.cmtrow td { padding: 0; background: var(--bg); }
 .editor label { font-size: 12px; color: var(--dim); display: inline-flex; align-items: center; gap: 4px; }
 .cmt.reply { margin-left: 14px; margin-top: 3px; border-left-width: 3px; }
 .thread.resolved .cmt { opacity: .75; }
+.thread.collapsed .tcol { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); padding: 2px 8px;
+  background: var(--cmt); border: 1px solid var(--cmtb); border-left-width: 4px; opacity: .75; }
+.thread.collapsed.note .tcol { background: var(--note); border-color: var(--noteb); }
+.thread.collapsed .tcol .sum { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.thread.collapsed .tcol .sum:hover { color: var(--fg); }
 .cmt .tools { float: right; margin-left: 8px; }
 .cmt .tools button { padding: 0 5px; font-size: 11px; }
 .cmt .when { color: var(--dim); font-size: 11px; }
@@ -1436,17 +1441,31 @@ function commentBox(cm, isReply) {
 }
 // A thread: the root comment, its replies, and a footer with resolve / reply /
 // where-did-this-line-go links.
+// A resolved thread collapses to one line until clicked; the set of threads
+// opened this way is not persisted.
+const openThreads = new Set();
 function threadEl(root) {
-  const t = el('div', { class: 'thread' + (isResolved(root) ? ' resolved' : ''), dataset: { root: root.id } });
+  const t = el('div', { class: 'thread' + (isResolved(root) ? ' resolved' : '') + (isNote(root) ? ' note' : ''), dataset: { root: root.id } });
+  if (isResolved(root) && !openThreads.has(root.id)) {
+    const cb = el('input', { type: 'checkbox', class: 'res', title: 'resolved; untick to reopen' }); cb.checked = true;
+    cb.addEventListener('change', () => setResolved(root.id, false));
+    const n = repliesTo(root.id).length;
+    const sum = el('span', { class: 'sum', title: 'Click to show the thread' }, el('b', null, whoLabel(root) + ': '), root.text.split('\n')[0] + (n ? ' · ' + n + (n === 1 ? ' reply' : ' replies') : ''));
+    sum.onclick = () => { openThreads.add(root.id); t.replaceWith(threadEl(root)); };
+    t.classList.add('collapsed');
+    t.append(el('div', { class: 'tcol' }, cb, 'resolved', sum));
+    return t;
+  }
   t.append(commentBox(root, false));
   for (const r of repliesTo(root.id)) t.append(commentBox(r, true));
   const foot = el('div', { class: 'tfoot' });
   if (root.author === 'reviewer') {
     const cb = el('input', { type: 'checkbox', class: 'res' }); cb.checked = isResolved(root);
-    cb.addEventListener('change', () => setResolved(root.id, cb.checked));
+    cb.addEventListener('change', () => { openThreads.delete(root.id); setResolved(root.id, cb.checked); });
     foot.append(el('label', null, cb, 'resolved'));
   }
   foot.append(el('a', { onclick: () => openEditor(t, { file: root.file, snap: root.snap, line: root.line, src: root.src }, null, null, root) }, 'reply'));
+  if (isResolved(root)) foot.append(el('a', { onclick: () => { openThreads.delete(root.id); t.replaceWith(threadEl(root)); } }, 'collapse'));
   if (root.file != null && M > 2 && root.snap != null) {
     const f = files[fileIndexByKey(root.file)];
     if (f) for (let k = root.snap + 1; k < M; k++) {
