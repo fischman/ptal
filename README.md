@@ -110,7 +110,10 @@ The loop:
    you accept; the panel filters all / unresolved / resolved, and the next
    brief contains only unresolved threads, with their history. Reply to a
    thread from the page to carry a rebuttal into the next round.
-4. Repeat with more `--then` commits and reply files as needed.
+4. Repeat with more `--then` commits and reply files as needed. Replies
+   are embedded in the page, not stored by the browser, so every
+   regeneration takes every reply file so far: `--then A --replies a.json
+   --then B --replies b.json`. The brief's command already lists them.
 
 A **note to self** is a comment the agent never sees: tick the box in
 the comment editor, or press `N` instead of `c`. Notes are left out of the

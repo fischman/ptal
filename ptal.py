@@ -1628,7 +1628,7 @@ function brief() {
     '3. Write `replies.json` with one entry per comment: `re` is the comment\'s id, `status` is one of fixed, answered, declined or deferred, and `text` says what you changed or why not. When the status is fixed, add `fixedAt`: one or more locations of the fix, each a full `commit` hash (your new commit), a `file` path and a `line` in that file at that commit. An entry with `at` instead of `re` is a note of your own about a location. The file must validate against this JSON schema:', '',
     '```json', JSON.stringify(DATA.replySchema), '```', '',
     '4. Hand back the hash(es) of your new commit(s) and `replies.json`. The reviewer then runs:', '',
-    '   `ptal.py ' + c.root + ' ' + c.sha + (M > 2 ? SN.slice(2).map(s => ' --then ' + s.sha).join('') : '') + ' --then <your commit> --replies replies.json`', '',
+    '   `ptal.py ' + c.root + ' ' + c.sha + (M > 2 ? SN.slice(2).map(s => ' --then ' + s.sha).join('') : '') + (DATA.replyFiles || []).map(p => ' --replies ' + p).join('') + ' --then <your commit> --replies <your replies file>`', '',
     '## Comments (' + rs.length + ' unresolved)', '',
     '```json', JSON.stringify({ comments: rs.map(briefComment) }, null, 1), '```', '');
   return out.join('\n');
@@ -1726,6 +1726,7 @@ def main():
     ap.add_argument("-o", "--output", help="output file (default: review-<short sha>.html in the current directory; - for stdout)")
     a = ap.parse_args()
     data = build(a.root, a.commit, a.then, load_replies(a.replies), load_seed(a.comments))
+    data["replyFiles"] = a.replies   # as given, for the command the brief prints
     out = a.output or "review-%s.html" % data["commit"]["short"]
     page = render(data)
     if out == "-":
