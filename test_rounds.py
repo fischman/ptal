@@ -25,9 +25,9 @@ with sync_playwright() as p:
         {{id: "L3", file: null, side: "commit", line: 0, src: "review me", text: "legacy whole-commit", created: "2026-10-25T00:00:02Z"}}]))''')
     pg.reload(); pg.wait_for_timeout(300)
     # seed merged in: 5 seeded + 3 legacy = 8 reviewer comments
-    assert txt(pg.locator('#btn-comments')) == 'Comments (9)', txt(pg.locator('#btn-comments'))
+    assert txt(pg.locator('#btn-comments')) == 'Comments (10)', txt(pg.locator('#btn-comments'))
     stored = pg.evaluate(f'JSON.parse(localStorage.getItem("ptal:{key}:comments"))')
-    assert {c['id'] for c in stored} == {'c1', 'c2', 'c3', 'c4', 'c5', 'n1', 'L1', 'L2', 'L3'}
+    assert {c['id'] for c in stored} == {'c1', 'c2', 'c2r', 'c3', 'c4', 'c5', 'n1', 'L1', 'L2', 'L3'}
     by = {c['id']: c for c in stored}
     assert by['L1']['snap'] == 0 and by['L1']['side'] == 'old' and by['L2']['snap'] == 1 and by['L2']['side'] == 'new' and by['L3']['snap'] is None and by['L3']['side'] == 'commit', by
     assert by['c2']['snap'] == 0 and by['c2']['side'] == 'old', by['c2']
@@ -45,6 +45,9 @@ with sync_playwright() as p:
     assert 'agent' in txt(th) and 'FIXED' in th.inner_text().upper() and 'Lowercased it.' in txt(th)
     assert 'S2 209bf0d: changed here' in txt(th), txt(th)          # line TWO was edited in S2
     th2 = pg.locator('#bottom .thread[data-root="c2"]'); assert 'S1 c362365: line 4' in txt(th2) and 'S2 209bf0d: line 4' in txt(th2), txt(th2)
+    # replies in time order: the reviewer's earlier follow-up (seeded 2026-10-26) before the agent's answer (file written later)
+    rt = th2.locator('.cmt.reply').all_inner_texts(); assert len(rt) == 2 and 'Also think about line five.' in rt[0] and "Added 'line four and a half'." in rt[1], rt
+    assert 'replies.json' in th2.locator('.cmt.agent .when').inner_text()
     assert th2.locator('.cmt.agent a.map', has_text='a.txt:5').count() == 1
     assert th2.locator('.cmt.agent span.map', has_text='0123456 a.txt:1 (not in this review)').count() == 1, txt(th2)   # unknown commit: text, no link
     thL1 = pg.locator('#bottom .thread[data-root="L1"]'); assert thL1.count() == 1 and 'legacy old-side' in txt(thL1)
@@ -123,7 +126,7 @@ with sync_playwright() as p:
     cs = {c['id']: c for c in cj['comments']}
     assert list(cs) == ['L3', 'c4', 'L1', 'c2', 'L2', 'c3'], list(cs)               # unresolved reviewer roots only (c1 resolved above, c5 seeded resolved), in panel order
     assert cs['c2'] == {'id': 'c2', 'commit': data['snaps'][0]['sha'], 'path': 'a.txt', 'line': 4, 'context': {'1': 'line one', '2': 'line two', '3': 'line three', '4': 'line four', '5': 'line five'},
-                        'text': 'This needs a line after it.', 'replies': [{'author': 'agent', 'status': 'fixed', 'text': "Added 'line four and a half'."}]}, cs['c2']
+                        'text': 'This needs a line after it.', 'replies': [{'author': 'reviewer', 'text': 'Also think about line five.'}, {'author': 'agent', 'status': 'fixed', 'text': "Added 'line four and a half'."}]}, cs['c2']
     assert cs['c3']['context'] == {'1': 'new file'}, cs['c3']
     assert cs['c4']['commit'] == data['snaps'][1]['sha'] and cs['c4']['messageLine'] == 1 and cs['c4']['context'] == {'1': 'review me', '2': '', '3': 'Body of the reviewed commit.'} and 'path' not in cs['c4'], cs['c4']
     assert cs['c3']['path'] == 'c.txt' and cs['c3']['commit'] == data['snaps'][1]['sha']
@@ -173,7 +176,7 @@ with sync_playwright() as p:
     print('reply thread OK')
     # JSON export carries snaps and resolved
     exp = pg.evaluate('''() => { const o = URL.createObjectURL; let t = null; URL.createObjectURL = b => { t = b; return 'blob:x'; }; document.getElementById('btn-json').click(); URL.createObjectURL = o; return t ? t.text() : null; }''')
-    exp = json.loads(exp); assert exp['snaps'] == [s['sha'] for s in data['snaps']] and exp['resolved'] == {'c5': True, 'c1': True, 'agent-replies.json-6': True, 'n1': True} and len(exp['comments']) == 11
+    exp = json.loads(exp); assert exp['snaps'] == [s['sha'] for s in data['snaps']] and exp['resolved'] == {'c5': True, 'c1': True, 'agent-replies.json-6': True, 'n1': True} and len(exp['comments']) == 12
     b.close()
 print('console errors/warnings:', errors)
 assert not errors

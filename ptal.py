@@ -554,6 +554,8 @@ def load_replies(paths):
             r["id"] = "agent-%s-%d" % (os.path.basename(path), k + 1)   # stable across reorderings of --replies
             r["author"] = "agent"
             r["source"] = os.path.basename(path)
+            # When the agent wrote the file: orders its replies among the reviewer's own, which carry their own times.
+            r["created"] = datetime.datetime.fromtimestamp(os.path.getmtime(path)).astimezone().isoformat(timespec="seconds")
             out.append(r)
     return out
 
@@ -1456,7 +1458,7 @@ function commentBox(cm, isReply) {
     el('button', { onclick: () => openEditor(box, cm, null, cm) }, 'edit'), ' ',
     el('button', { class: 'danger', onclick: () => deleteComment(cm.id) }, 'delete')));
   box.append(el('span', { class: 'who ' + whoClass(cm) }, whoLabel(cm)), statusEl(cm.status),
-    el('span', { class: 'when' }, cm.created ? fmtDate(cm.updated || cm.created) + (cm.updated ? ' (edited)' : '') : (cm.source || '')), el('br'), cm.text);
+    el('span', { class: 'when' }, (cm.source ? cm.source + ' ' : '') + (cm.created ? fmtDate(cm.updated || cm.created) + (cm.updated ? ' (edited)' : '') : '')), el('br'), cm.text);
   if (cm.fixedAt && cm.fixedAt.length) {
     const p = el('div', { class: 'tfoot' }, 'see: ');
     for (const x of cm.fixedAt) p.append(locLink(x), ' ');
