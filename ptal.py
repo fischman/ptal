@@ -390,11 +390,9 @@ def assemble_files(root, snaps, trees):
             if st != "D":
                 f["paths"][i + 1] = ch["path"]
             f["status"][i] = st
-    for f in files:   # unchanged in a step: carry the path forward
-        for j in range(1, M):
-            if f["paths"][j] is None and f["paths"][j - 1] is not None and (j - 1) not in f["status"] \
-                    and f["paths"][j - 1] in trees[j]:
-                f["paths"][j] = f["paths"][j - 1]
+        for f in files:   # unchanged in this step: carry the path forward, so later steps find the file
+            if f["paths"][i + 1] is None and f["paths"][i] is not None and i not in f["status"] and f["paths"][i] in trees[i + 1]:
+                f["paths"][i + 1] = f["paths"][i]
     for f in files:
         f["modes"] = [trees[k][p][0] if p else None for k, p in enumerate(f["paths"])]
         f["shas"] = [trees[k][p][1] if p else None for k, p in enumerate(f["paths"])]

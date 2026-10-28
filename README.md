@@ -145,6 +145,11 @@ of different commits apart, while a page regenerated for the same commit
 
 ## Testing
 
+`test_files.py` needs only git: it builds a throwaway repository with five
+snapshots (a rename, a delete and re-add, a file left alone in one round
+and changed again in the next) and checks that each file gets exactly one
+entry. `./test_files.py`.
+
 `test_rounds.py` drives a three-snapshot page made with `--then`,
 `--replies` and `--comments` (seeded and legacy-format comments, threaded
 replies, line mapping, view switching, resolve marks, the brief).
