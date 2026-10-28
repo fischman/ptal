@@ -816,8 +816,6 @@ tr.cmtrow td { padding: 0; background: var(--bg); }
   <div class="phead">
     <b id="ptitle">Comments</b>
     <button id="btn-brief" title="Markdown brief of the unresolved comments, with context and the reply format">Copy brief for agent</button>
-    <button id="btn-copy">Copy as Markdown</button>
-    <button id="btn-json">Download JSON</button>
     <button id="btn-delall" class="danger">Delete all</button>
     <button id="btn-pclose">Close</button>
   </div>
@@ -1554,11 +1552,12 @@ function renderPanel() {
   const rs = sortedRoots(), nres = rs.filter(isResolved).length;
   const nnotes = rs.filter(isNote).length;
   $('#ptitle').textContent = rs.length + ' comment' + (rs.length === 1 ? '' : 's') + (nres ? ', ' + nres + ' resolved' : '') + (nnotes ? ', ' + nnotes + ' note' + (nnotes === 1 ? '' : 's') + ' to self' : '');
+  const passes = (c, k) => k === 'all' || (k === 'notes' ? isNote(c) : (k === 'resolved') === isResolved(c));
   pf.append('show: ');
   for (const [k, label] of [['all', 'all'], ['unresolved', 'unresolved'], ['resolved', 'resolved'], ['notes', 'notes to self']])
-    pf.append(el('button', { class: ui.filter === k ? 'on' : '', dataset: { filter: k }, onclick: () => { ui.filter = k; saveUI(); renderPanel(); } }, label));
+    pf.append(el('button', { class: ui.filter === k ? 'on' : '', dataset: { filter: k }, onclick: () => { ui.filter = k; saveUI(); renderPanel(); } }, label + ' (' + rs.filter(c => passes(c, k)).length + ')'));
   const orphans = agentComments.filter(c => c.orphan);
-  const shown = rs.filter(c => ui.filter === 'all' || (ui.filter === 'notes' ? isNote(c) : (ui.filter === 'resolved') === isResolved(c)));
+  const shown = rs.filter(c => passes(c, ui.filter));
   if (!shown.length) { body.append(el('div', { id: 'empty' }, rs.length ? 'Nothing ' + ui.filter + '.' : 'No comments yet.')); }
   let lastFile;
   for (const cm of shown) {
@@ -1599,28 +1598,8 @@ function jumpTo(cm) {
   }
   showLine(cm.file, cm.snap, cm.line, cm.id);
 }
-function openPanel() { renderPanel(); $('#panel').classList.add('open'); }
+function openPanel() { ui.filter = 'unresolved'; saveUI(); renderPanel(); $('#panel').classList.add('open'); }
 function closePanel() { $('#panel').classList.remove('open'); }
-function ticks(s) { return s.replace(/`/g, 'ˋ'); }
-function asMarkdown() {
-  const c = DATA.commit, out = ['# Review of ' + c.short + ' ' + c.subject, ''];
-  const rs = sortedRoots();
-  section(rs.filter(cm => !isNote(cm)));
-  if (rs.some(isNote)) { out.push('# Notes to self', ''); section(rs.filter(isNote)); }
-  return out.join('\n');
-  function section(list) {
-  let lastFile;
-  for (const cm of list) {
-    const fname = cm.file == null ? 'Commit message' : cm.file;
-    if (fname !== lastFile) { out.push('## ' + fname, ''); lastFile = fname; }
-    const loc = cm.file == null ? (cm.line ? 'line ' + cm.line : 'general') : 'S' + cm.snap + ':' + cm.line;
-    out.push('- **' + loc + '**' + (isResolved(cm) ? ' (resolved)' : '') + (cm.src ? ' `' + ticks(cm.src).trim() + '`' : ''));
-    out.push(...cm.text.split('\n').map(l => '  ' + l));
-    for (const r of repliesTo(cm.id)) out.push('  - *' + r.author + (r.status ? ' (' + r.status + ')' : '') + ':* ' + r.text.split('\n').join('\n    '));
-    out.push('');
-  }
-  }
-}
 // The brief: what a coding agent needs to act on the unresolved comments and
 // to write a replies file ptal can embed: instructions, the reply schema, and
 // the comments as JSON.
@@ -1664,10 +1643,6 @@ function copyText(text) {
     const ta = el('textarea', null, text); document.body.append(ta); ta.select();
     try { document.execCommand('copy'); toast('Copied'); } catch (e) { toast('Copy failed'); } ta.remove();
   }
-}
-function download(name, text, type) {
-  const a = el('a', { href: URL.createObjectURL(new Blob([text], { type })), download: name });
-  document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 
 // ---- top pane sizing ---------------------------------------------------------
@@ -1715,10 +1690,7 @@ $('#btn-comments').onclick = openPanel;
 $('#btn-pclose').onclick = closePanel;
 $('#btn-help').onclick = () => $('#help').classList.add('open');
 $('#btn-hclose').onclick = () => $('#help').classList.remove('open');
-$('#btn-copy').onclick = () => copyText(asMarkdown());
 $('#btn-brief').onclick = () => copyText(brief());
-$('#btn-json').onclick = () => download('review-' + DATA.commit.short + '-comments.json',
-  JSON.stringify({ commit: DATA.commit.sha, snaps: SN.map(s => s.sha), comments: comments.slice(), resolved }, null, 2), 'application/json');
 $('#btn-delall').onclick = () => {
   if (!comments.length) return;
   if (confirm('Delete all ' + comments.length + ' of your comments for this review? This cannot be undone.')) { comments = []; resolved = {}; saveComments(); saveResolved(); rerenderAll(); toast('All comments deleted'); }

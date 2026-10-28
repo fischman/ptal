@@ -101,9 +101,6 @@ with sync_playwright() as p:
       pg.keyboard.press('C'); pg.wait_for_timeout(200)
       assert pg.locator('#panel.open').count() == 1 and pg.locator('#panel .pc').count() == n_inline + 2
       pg.screenshot(path=f'{shots}/06-panel.png')
-      md = pg.evaluate('''() => { let t=''; const o=navigator.clipboard.writeText; navigator.clipboard.writeText = s => { t=s; return Promise.resolve(); }; document.getElementById('btn-copy').click(); return t; }''')
-      print('markdown export:\n' + md)
-      assert md.startswith('# Review of ') and ('S0:' in md or 'S1:' in md)
       # delete one from panel
       pg.locator('#panel .pc button', has_text='delete').first.click(); pg.wait_for_timeout(200)
       assert pg.locator('#panel .pc').count() == n_inline + 1

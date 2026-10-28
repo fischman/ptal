@@ -52,9 +52,10 @@ the same way.
 - **Comments**: click a line number on either side, or the gutter of a
   commit-message line, or "+ comment on the commit". `Ctrl+Enter` saves.
   Comments show inline under their line (on their side) and can be edited or
-  deleted there. The **Comments** button (or `C`) lists them all, in file and
-  line order, with jump links, per-comment delete, delete-all, "Copy as
-  Markdown" and "Download JSON".
+  deleted there. The **Comments** button (or `C`) lists them in file and
+  line order, unresolved ones first by default (filters: all / unresolved /
+  resolved / notes to self, each with its count), with jump links,
+  per-comment delete and delete-all.
 
 ## Example output
 
@@ -121,15 +122,15 @@ The loop:
 
 A **note to self** is a comment the agent never sees: tick the box in
 the comment editor, or press `N` instead of `c`. Notes are left out of the
-brief, listed under their own heading in the Markdown copy, and shown in a
+brief, and shown in a
 box at the top of the commit pane until resolved, so they survive any number
 of regenerations with further `--then` and `--replies`. The panel has a
 "notes to self" filter. Editing a note and unticking the box turns it into
 an ordinary comment for the next brief.
 
-`--comments FILE` seeds the page with a comments export (the panel's
-**Download JSON**) for use in another browser; records already present are
-kept. Reviewed marks are per view, so files touched in a round come back
+`--comments FILE` seeds the page's storage with comment records (a JSON
+list, or an object with `comments` and `resolved`, in the page's own storage
+format) for use in another browser; records already present are kept. Reviewed marks are per view, so files touched in a round come back
 unreviewed for that round.
 
 ## Storage

@@ -92,7 +92,10 @@ with sync_playwright() as p:
     print('net view OK')
     # panel: filters and resolve
     pg.keyboard.press('C'); pg.wait_for_timeout(200)
-    assert pg.locator('#panel .pc[data-id]').count() == 10, pg.locator('#panel .pc[data-id]').count()   # 9 reviewer roots (incl. the note to self) + the agent note; the orphan has no id card
+    assert pg.locator('#panel .pc[data-id]').count() == 9, pg.locator('#panel .pc[data-id]').count()    # opens on unresolved: 10 roots (9 reviewer incl. the note, 1 agent note) minus resolved c5
+    assert pg.locator('#pfilter button').all_inner_texts() == ['all (10)', 'unresolved (9)', 'resolved (1)', 'notes to self (1)'], pg.locator('#pfilter button').all_inner_texts()
+    pg.locator('#pfilter button[data-filter="all"]').click(); pg.wait_for_timeout(100)
+    assert pg.locator('#panel .pc[data-id]').count() == 10
     assert 'Agent entries that could not be placed (2)' in txt(pg.locator('#pbody')), txt(pg.locator('#pbody'))[-300:]
     assert 're: nonexistent (no such comment in this browser)' in txt(pg.locator('#pbody')) and 'at: 0123456 z.txt:1 (commit not in this review)' in txt(pg.locator('#pbody'))
     pg.locator('#pfilter button[data-filter="resolved"]').click(); pg.wait_for_timeout(100)
@@ -132,12 +135,10 @@ with sync_playwright() as p:
     assert cs['c3']['path'] == 'c.txt' and cs['c3']['commit'] == data['snaps'][1]['sha']
     assert 'n1' not in brief and 'remind me' not in brief                            # notes to self never reach the agent
     print('brief OK:', len(brief), 'chars')
-    # notes to self: top-pane alert, panel filter and label, Markdown section, creation with N, resolving clears the alert
+    # notes to self: top-pane alert, panel filter and label, creation with N, resolving clears the alert
     assert '1 open note to self' in txt(pg.locator('#notes')) and 'remind me: check line three' in txt(pg.locator('#notes')) and 'second line' not in txt(pg.locator('#notes')), txt(pg.locator('#notes'))
     pg.locator('#pfilter button[data-filter="notes"]').click(); pg.wait_for_timeout(100)      # the panel is still open from above
     assert [e.get_attribute('data-id') for e in pg.locator('#panel .pc[data-id]').all()] == ['n1'] and pg.locator('#panel .pc.note .who.note', has_text='note to self').count() == 1
-    md = pg.evaluate('''() => { let t=''; navigator.clipboard.writeText = s => { t=s; return Promise.resolve(); }; document.getElementById('btn-copy').click(); return t; }''')
-    assert md.index('# Notes to self') > md.index('This needs a line after it.') and 'remind me' in md[md.index('# Notes to self'):], md
     pg.locator('#pfilter button[data-filter="all"]').click(); pg.keyboard.press('Escape'); pg.wait_for_timeout(100)
     pg.locator('#viewsel').select_option('0-1'); pg.locator('#ftree tr.file', has_text='a.txt').click(); pg.wait_for_timeout(200)   # the note is on S1, absent from the net view
     assert pg.locator('#bottom .thread[data-root="n1"] .cmt.note .who', has_text='note to self').count() == 1
@@ -174,9 +175,7 @@ with sync_playwright() as p:
     stored = pg.evaluate(f'JSON.parse(localStorage.getItem("ptal:{key}:comments"))')
     rep = [c for c in stored if c.get('re') == 'c3']; assert len(rep) == 1 and rep[0]['side'] == 'new' and rep[0]['snap'] == 1, rep
     print('reply thread OK')
-    # JSON export carries snaps and resolved
-    exp = pg.evaluate('''() => { const o = URL.createObjectURL; let t = null; URL.createObjectURL = b => { t = b; return 'blob:x'; }; document.getElementById('btn-json').click(); URL.createObjectURL = o; return t ? t.text() : null; }''')
-    exp = json.loads(exp); assert exp['snaps'] == [s['sha'] for s in data['snaps']] and exp['resolved'] == {'c5': True, 'c1': True, 'agent-replies.json-6': True, 'n1': True} and len(exp['comments']) == 12
+    assert pg.evaluate(f'JSON.parse(localStorage.getItem("ptal:{key}:resolved"))') == {'c5': True, 'c1': True, 'agent-replies.json-6': True, 'n1': True}
     b.close()
 print('console errors/warnings:', errors)
 assert not errors
