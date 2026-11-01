@@ -746,6 +746,11 @@ table.diff { border-collapse: collapse; width: 100%; table-layout: fixed; font-f
              tab-size: 4; }
 table.diff.nowrap { width: auto; min-width: 100%; table-layout: auto; }
 table.diff col.ln { width: 3.4em; }
+.diffwrap { position: relative; }
+.vsplit { position: absolute; top: 0; bottom: 0; width: 7px; margin-left: -4px; cursor: col-resize; z-index: 2; touch-action: none; }
+table.diff.nowrap + .vsplit { display: none; }
+table.diff tr.fold td { position: relative; z-index: 3; }   /* above the side handle: the whole row is a button */
+.vsplit:hover, .vsplit.drag { background: linear-gradient(to right, transparent 3px, var(--accent) 3px 4px, transparent 4px); }
 table.diff td { padding: 0 4px; vertical-align: top; line-height: 1.45; }
 td.ln { text-align: right; color: var(--dim); user-select: none; cursor: pointer; white-space: nowrap;
         border-right: 1px solid var(--line); min-width: 3.4em; }
@@ -882,6 +887,8 @@ tr.cmtrow td { padding: 0; background: var(--bg); }
        to the snapshot it was made on and shows in every view that includes that snapshot. Comments, reviewed marks and
        resolved marks are stored in this browser's localStorage under a prefix made from the commit's abbreviated hash,
        so a regenerated page for the same commit keeps them.</p>
+    <p>Drag the border between the two sides of the diff to give one side more width; double-click it for half and
+       half. This works while lines wrap; unwrapped, each side is as wide as its longest line.</p>
   </div>
 </div>
 <div id="toast"></div>
@@ -917,7 +924,8 @@ function normalize(c) {
 }
 let comments = store.get('comments', []).map(normalize);
 let resolved = store.get('resolved', {});
-const ui = Object.assign({ file: -1, hunk: -1, topH: null, wrap: true, topHidden: false, collapsed: {}, unreviewedOnly: false, view: [0, 1], filter: 'all' }, store.get('ui', {}));
+const ui = Object.assign({ file: -1, hunk: -1, topH: null, wrap: true, topHidden: false, collapsed: {}, unreviewedOnly: false, view: [0, 1], filter: 'all', split: 0.5 }, store.get('ui', {}));
+if (!(ui.split >= 0.1 && ui.split <= 0.9)) ui.split = 0.5;
 if (!Array.isArray(ui.view) || ui.view.length !== 2 || !(ui.view[0] >= 0 && ui.view[1] < M && ui.view[0] < ui.view[1])) ui.view = [0, 1];
 function reviewedKey() { const [a, b] = ui.view; return a === 0 && b === 1 ? 'reviewed' : 'reviewed:' + a + '-' + b; }
 let reviewed = store.get(reviewedKey(), {});
@@ -1338,7 +1346,8 @@ function renderDiff() {
   }
   if (!rows.length) { bottom.append(el('div', { id: 'empty' }, 'Empty file.')); updateHunkPos(); return; }
   const table = el('table', { class: 'diff' + (ui.wrap ? '' : ' nowrap') },
-    el('colgroup', null, el('col', { class: 'ln' }), el('col'), el('col', { class: 'ln' }), el('col')));
+    el('colgroup', null, el('col', { class: 'ln' }), el('col', { class: 'lc' }), el('col', { class: 'ln' }), el('col', { class: 'rc' })));
+  setSplit(table);
   const tbody = el('tbody');
   const interesting = rows.map(r => r.t !== 'eq' || hasComment(f, r));
   let i = 0;
@@ -1356,8 +1365,33 @@ function renderDiff() {
     i = j;
   }
   table.append(tbody);
-  bottom.append(table);
+  const handle = el('div', { class: 'vsplit', title: 'Drag to share the width between the sides; double-click for half and half' });
+  bottom.append(el('div', { class: 'diffwrap' }, table, handle));
+  placeSplit(table, handle);
+  new ResizeObserver(() => placeSplit(table, handle)).observe(table);
+  handle.addEventListener('pointerdown', e => {
+    e.preventDefault(); handle.setPointerCapture(e.pointerId); handle.classList.add('drag');
+    const move = ev => {
+      const r = table.getBoundingClientRect(), ln = table.querySelector('td.ln.o').getBoundingClientRect().width;
+      ui.split = Math.max(0.1, Math.min(0.9, (ev.clientX - r.left - ln) / (r.width - 2 * ln)));
+      setSplit(table); placeSplit(table, handle);
+    };
+    const up = () => { handle.classList.remove('drag'); handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); saveUI(); };
+    handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', up);
+  });
+  handle.addEventListener('dblclick', () => { ui.split = 0.5; saveUI(); setSplit(table); placeSplit(table, handle); });
   markCurrent(); updateHunkPos();
+}
+// The handle sits on the border between the sides: the left edge of the new
+// side's line-number column.
+// The code columns share the width left over by the line-number columns.
+function setSplit(table) {
+  table.querySelector('col.lc').style.width = (ui.split * 100) + '%';
+  table.querySelector('col.rc').style.width = ((1 - ui.split) * 100) + '%';
+}
+function placeSplit(table, handle) {
+  const c = table.querySelector('td.ln.n');
+  if (c) handle.style.left = (c.getBoundingClientRect().left - table.getBoundingClientRect().left) + 'px';
 }
 function hasComment(f, r) {
   const [a, b] = ui.view;

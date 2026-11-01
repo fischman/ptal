@@ -126,6 +126,19 @@ with sync_playwright() as p:
     pg.screenshot(path=f'{shots}/07-nowrap.png')
     pg.keyboard.press('w'); pg.keyboard.press('t'); pg.wait_for_timeout(200)
     assert pg.evaluate('document.getElementById("top").getBoundingClientRect().height') == 0
+    # dragging the border between the sides reallocates the width; double-click restores half and half
+    if pg.locator('table.diff:not(.nowrap)').count():
+        def code_w(side): return pg.locator(f'table.diff td.code.{side}').first.bounding_box()['width']
+        assert abs(code_w('o') - code_w('n')) <= 2
+        pg.evaluate('document.getElementById("bottom").scrollTop = 0')
+        h = pg.locator('.vsplit').bounding_box(); c = pg.locator('table.diff td.ln.n').first.bounding_box(); x, y = h['x'] + h['width'] / 2, c['y'] + c['height'] / 2   # a line row: fold rows sit above the handle
+        pg.mouse.move(x, y); pg.mouse.down(); pg.mouse.move(x - 200, y, steps=5); pg.mouse.up(); pg.wait_for_timeout(100)
+        assert code_w('n') - code_w('o') > 350, (code_w('o'), code_w('n'))
+        hx = pg.locator('.vsplit').bounding_box(); assert abs(hx['x'] + hx['width'] / 2 - pg.locator('table.diff td.ln.n').first.bounding_box()['x']) <= 2
+        assert 0.1 < pg.evaluate(f'JSON.parse(localStorage.getItem("ptal:{key}:ui")).split') < 0.4
+        pg.locator('.vsplit').dblclick(); pg.wait_for_timeout(100); assert abs(code_w('o') - code_w('n')) <= 2
+        pg.keyboard.press('w'); pg.wait_for_timeout(100); assert not pg.locator('.vsplit').is_visible(); pg.keyboard.press('w')
+        print('side split drag / reset OK')
     pg.keyboard.press('t'); pg.keyboard.press('?'); pg.wait_for_timeout(100); assert pg.locator('#help.open').count() == 1
     pg.keyboard.press('Escape'); assert pg.locator('#help.open').count() == 0
     # binary + added + deleted files render

@@ -48,7 +48,9 @@ the same way.
   after images side by side; SVGs and vector drawables get the text diff
   below the images, and light-coloured drawables sit on a dark plate. Long unchanged stretches fold into a
   `⋯ N unchanged lines ⋯` row; click it or press `x` to expand. `w` toggles
-  wrapping (unwrapped lines scroll horizontally).
+  wrapping (unwrapped lines scroll horizontally). While lines wrap, drag the
+  border between the two sides to share the width differently (remembered
+  per page); double-click it for half and half.
 - **Keys**: `n` / `p` next / previous change, continuing into the next /
   previous file at the ends; `]` / `[` next / previous file; `c` comment on
   the current change; `C` all comments; `r` reviewed on/off; `u` unreviewed
