@@ -16,7 +16,13 @@ only; no network access from the page.
 `GIT_ROOT` is anything `git -C` accepts. The default output is
 `review-<short sha>.html` in the current directory; `-o -` writes to stdout.
 A merge commit is compared with its first parent, a root commit with the
-empty tree. Each `--then` adds a follow-up commit as another snapshot (see
+empty tree. `COMMITTISH` can also be a range `A..B`, or `A...B` to start
+at the merge base of A and B: the range is reviewed as if it were one
+commit from A to B. The file list and diffs are those of `git diff A B`, so
+a file changed and changed back within the range does not appear, while the
+top pane shows the message of every commit in the range, oldest first, and
+a comment on a message line belongs to that commit (the brief names it).
+Storage keys use `<short A>..<short B>` in place of the short hash. Each `--then` adds a follow-up commit as another snapshot (see
 "Rounds" below). Renames and copies are detected (`-M -C`). Image files (png,
 jpeg, gif, webp, svg, bmp, ico, avif) are embedded as data URIs, up to 10 MB
 a side. Android vector drawables (`<vector>` XML: paths, groups with
@@ -150,6 +156,11 @@ of different commits apart, while a page regenerated for the same commit
 snapshots (a rename, a delete and re-add, a file left alone in one round
 and changed again in the next) and checks that each file gets exactly one
 entry. `./test_files.py`.
+
+`test_range.py` builds a throwaway repository, checks a range page's data
+with git alone, then drives it in headless Chromium (every commit's
+message, a comment on one commit's message line, the brief):
+`test_range.py SCREENSHOT_DIR`.
 
 `test_rounds.py` drives a three-snapshot page made with `--then`,
 `--replies` and `--comments` (seeded and legacy-format comments, threaded

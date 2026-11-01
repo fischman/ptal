@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ptal: a single-file, portrait-oriented code review page for one git commit.
+"""ptal: a single-file, portrait-oriented code review page for one git commit (or range).
 
     ptal.py GIT_ROOT COMMITTISH [--then COMMITTISH]... [--replies FILE]... [--comments FILE] [-o OUT.html]
 
@@ -30,7 +30,11 @@ avif) are embedded and shown before/after; Android vector drawables (XML)
 are converted to SVG for the same purpose.
 
 A merge commit is compared with its first parent; a root commit with the
-empty tree.  Python 3 standard library and git only.
+empty tree.  COMMITTISH can also be a range A..B (or A...B, which starts at
+the merge base): it is reviewed as one commit, S0 = A and S1 = B, so a file
+changed and changed back within the range is not listed.  The top pane shows
+the message of every commit in the range, and comments on a message line
+name that commit.  Python 3 standard library and git only.
 """
 
 import argparse
@@ -73,6 +77,34 @@ def commit_info(root, committish):
         "base": parents[0] if parents else EMPTY_TREE,
         "root": root,   # as given, so the brief's command works for whoever runs it
     }
+
+
+def range_info(root, spec):
+    """A..B or A...B (A defaults to HEAD, as does B; A...B starts at the merge
+    base): the tip's commit_info, with base set to the range's start and
+    "range" listing its commits oldest first, so the range reviews as one
+    commit.  None when spec is not a range."""
+    m = re.fullmatch(r"(.*?)(\.\.\.?)(.*)", spec)
+    if not m or not (m.group(1) or m.group(3)):
+        return None
+    a, dots, b = m.group(1) or "HEAD", m.group(2), m.group(3) or "HEAD"
+    info = commit_info(root, b)
+    start = git(root, "rev-parse", "--verify", "--end-of-options", a + "^{commit}").decode().strip()
+    if dots == "...":
+        start = git(root, "merge-base", start, info["sha"]).decode().strip()
+    shas = git(root, "rev-list", "--reverse", "%s..%s" % (start, info["sha"])).decode().split()
+    if not shas:
+        sys.exit("%s: no commits in the range" % spec)
+    commits = [commit_info(root, s) for s in shas]
+    start_short = git(root, "rev-parse", "--short", start).decode().strip()
+    info.update({
+        "short": "%s..%s" % (start_short, info["short"]), "parents": [start], "base": start,
+        "subject": commits[0]["subject"] if len(commits) == 1 else "%d commits" % len(commits), "body": "",
+        "range": {"spec": "%s..%s" % (start, info["sha"]), "tipShort": info["short"],
+                  "commits": [{k: c[k] for k in ("sha", "short", "parents", "author", "authorEmail", "authorDate",
+                                                 "committer", "commitDate", "subject", "body")} for c in commits]},
+    })
+    return info
 
 
 def raw_changes(root, base, sha):
@@ -407,12 +439,13 @@ def key_of(f):
 
 
 def build(root, committish, thens, replies, seed):
-    info = commit_info(root, committish)
+    info = range_info(root, committish) or commit_info(root, committish)
     follow = [commit_info(root, t) for t in thens]
     resolve_locations(root, replies)
     base_short = git(root, "rev-parse", "--short", info["base"]).decode().strip() if info["parents"] else "empty"
+    tip = info["range"]["tipShort"] if "range" in info else info["short"]
     snaps = [{"sha": info["base"], "short": base_short, "label": "base", "subject": None, "round": 0},
-             {"sha": info["sha"], "short": info["short"], "label": info["short"], "subject": info["subject"], "round": 1}]
+             {"sha": info["sha"], "short": tip, "label": tip, "subject": info["subject"], "round": 1}]
     for k, c in enumerate(follow):
         snaps.append({"sha": c["sha"], "short": c["short"], "label": c["short"], "subject": c["subject"], "round": k + 2,
                       "author": c["author"], "authorDate": c["authorDate"], "body": c["body"]})
@@ -647,6 +680,8 @@ code, .mono { font-family: var(--mono); font-size: 12px; }
 #commit .follow summary { cursor: pointer; }
 #commit .follow pre { white-space: pre-wrap; font: 12px/1.4 var(--mono); margin: 4px 0; }
 .msg { margin: 6px 0; }
+.msg .mhead { color: var(--dim); font-size: 12px; margin: 10px 0 2px; }
+.msg .mhead .mono { color: var(--fg); }
 .mline { display: flex; align-items: flex-start; }
 .mline .gut, .ln { flex: 0 0 auto; color: var(--dim); cursor: pointer; user-select: none; text-align: right; }
 .mline .gut { width: 1.6em; min-height: 1.4em; align-self: stretch; margin-right: 6px; font-family: var(--mono); font-size: 12px; }
@@ -920,6 +955,13 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.ad
 function fmtDate(iso) { try { return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return iso; } }
 function fmtSize(n) { return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(2) + ' MB'; }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+// A range page reviews several commits as one: its message pane shows each
+// commit's message, and a comment on a message line carries msg, that
+// commit's hash.  A single-commit page has one message and no msg.
+const RANGE = DATA.commit.range || null;
+const MSGS = RANGE ? RANGE.commits : [DATA.commit];
+function msgOf(sha) { return MSGS.find(m => m.sha === sha) || DATA.commit; }
+function msgLines(m) { return [m.subject, ...(m.body ? ['', ...m.body.split('\n')] : [])]; }
 function snapName(k) { return 'S' + k + ' ' + SN[k].label; }
 function linesAt(f, k) { const s = f.shas[k]; return s && blobs[s].lines ? blobs[s].lines : []; }
 function isBinaryAt(f, k) { const s = f.shas[k]; return !!(s && blobs[s].binary); }
@@ -991,7 +1033,7 @@ function locLink(x, before) {
 }
 function all() { return comments.concat(agentComments); }
 function byId(id) { return all().find(c => c.id === id); }
-function rootsAt(file, snap, line) { return all().filter(c => !c.re && !c.orphan && c.file === file && c.snap === snap && c.line === line); }
+function rootsAt(file, snap, line, msg) { return all().filter(c => !c.re && !c.orphan && c.file === file && c.snap === snap && c.line === line && (file != null || (c.msg || null) === (msg || null))); }
 function repliesTo(id) { return all().filter(c => c.re === id).sort((x, y) => (x.created || '') < (y.created || '') ? -1 : 1); }
 function roots() { return all().filter(c => !c.re && !c.orphan); }
 function isResolved(c) { return !!resolved[c.id]; }
@@ -1076,12 +1118,16 @@ function renderCommit() {
   const meta = el('div', { class: 'meta' });
   meta.append(el('span', { class: 'mono', title: c.sha }, c.sha), ' ');
   if (c.refs) meta.append(el('span', null, '(' + c.refs + ')'), ' ');
-  meta.append(el('br'), el('b', null, c.author), ' <' + c.authorEmail + '> ', fmtDate(c.authorDate));
-  if (c.committer !== c.author || c.commitDate !== c.authorDate)
-    meta.append(el('br'), 'committed by ', el('b', null, c.committer), ' ', fmtDate(c.commitDate));
-  meta.append(el('br'), c.parents.length ? 'parent' + (c.parents.length > 1 ? 's' : '') + ' ' : 'root commit',
-    ...c.parents.map(p => el('span', { class: 'mono', title: p }, p.slice(0, 10) + ' ')));
-  if (c.parents.length > 1) meta.append(el('br'), 'merge commit: changes shown against the first parent');
+  if (RANGE) meta.append(el('br'), 'range of ' + MSGS.length + ' commit' + (MSGS.length === 1 ? '' : 's') + ' from ',
+    el('span', { class: 'mono', title: c.base }, c.base.slice(0, 10)), ', reviewed as one change');
+  else {
+    meta.append(el('br'), el('b', null, c.author), ' <' + c.authorEmail + '> ', fmtDate(c.authorDate));
+    if (c.committer !== c.author || c.commitDate !== c.authorDate)
+      meta.append(el('br'), 'committed by ', el('b', null, c.committer), ' ', fmtDate(c.commitDate));
+    meta.append(el('br'), c.parents.length ? 'parent' + (c.parents.length > 1 ? 's' : '') + ' ' : 'root commit',
+      ...c.parents.map(p => el('span', { class: 'mono', title: p }, p.slice(0, 10) + ' ')));
+    if (c.parents.length > 1) meta.append(el('br'), 'merge commit: changes shown against the first parent');
+  }
   meta.append(el('br'), el('span', null, c.root + ' · generated ' + fmtDate(DATA.generated)));
   box.append(meta);
   const notes = openNotes();
@@ -1090,19 +1136,22 @@ function renderCommit() {
     for (const cm of notes) nb.append(el('div', { title: cm.text }, el('a', { onclick: () => jumpTo(cm) }, cm.file == null ? 'commit' : cm.file + ' ' + snapName(cm.snap) + ':' + cm.line), cm.text.split('\n')[0]));
     box.append(nb);
   }
-  const msg = el('div', { class: 'msg' });
-  const lines = [c.subject, ...(c.body ? ['', ...c.body.split('\n')] : [])];
-  lines.forEach((text, i) => {
-    const ln = i + 1, ts = rootsAt(null, null, ln);
-    const line = el('div', { class: 'mline' + (i === 0 ? ' subject' : ''), dataset: { line: ln } },
-      el('span', { class: 'gut' + (ts.length ? ' has' : ''), title: 'Comment on this line', onclick: () => openEditor(line, { file: null, snap: null, line: ln, src: text }) }),
-      el('span', { class: 'txt' }, text || ' '));
-    msg.append(line);
-    for (const cm of ts) msg.append(threadEl(cm));
-  });
-  box.append(msg);
+  for (const m of MSGS) {
+    const key = RANGE ? m.sha : null, msg = el('div', { class: 'msg', dataset: key ? { msg: key } : {} });
+    if (RANGE) msg.append(el('div', { class: 'mhead' }, el('span', { class: 'mono', title: m.sha }, m.short), ' ', el('b', null, m.author), ' ', fmtDate(m.authorDate),
+      m.parents.length > 1 ? ' · merge' : ''));
+    msgLines(m).forEach((text, i) => {
+      const ln = i + 1, ts = rootsAt(null, null, ln, key);
+      const line = el('div', { class: 'mline' + (i === 0 ? ' subject' : ''), dataset: { line: ln } },
+        el('span', { class: 'gut' + (ts.length ? ' has' : ''), title: 'Comment on this line', onclick: () => openEditor(line, { file: null, snap: null, line: ln, src: text, msg: key }) }),
+        el('span', { class: 'txt' }, text || ' '));
+      msg.append(line);
+      for (const cm of ts) msg.append(threadEl(cm));
+    });
+    box.append(msg);
+  }
   const general = el('div', { class: 'actions' },
-    el('button', { onclick: () => openEditor(general, { file: null, snap: null, line: 0, src: c.subject }) }, '+ comment on the commit'));
+    el('button', { onclick: () => openEditor(general, { file: null, snap: null, line: 0, src: c.subject }) }, RANGE ? '+ comment on the whole range' : '+ comment on the commit'));
   box.append(general);
   for (const cm of rootsAt(null, null, 0)) box.append(threadEl(cm));
   if (M > 2) {
@@ -1418,6 +1467,7 @@ function openEditor(anchor, target, side, existing, parent, asNote) {
     if (existing) { existing.text = text; existing.updated = new Date().toISOString(); if (noteCb) { if (noteCb.checked) existing.kind = 'note'; else delete existing.kind; } }
     else {
       const c = { id: uid(), author: 'reviewer', re: parent ? parent.id : null, file: target.file, snap: target.snap, line: target.line, src: target.src, text, created: new Date().toISOString() };
+      if (target.msg) c.msg = target.msg;
       if (noteCb && noteCb.checked) c.kind = 'note';
       comments.push(normalize(c));
       if (parent && parent.author === 'agent' && parent.re) { /* a reply to a reply stays on the same thread root */ }
@@ -1487,7 +1537,7 @@ function threadEl(root) {
   const cb = el('input', { type: 'checkbox', class: 'res' }); cb.checked = isResolved(root);
   cb.addEventListener('change', () => { openThreads.delete(root.id); setResolved(root.id, cb.checked); });
   foot.append(el('label', null, cb, 'resolved'));
-  foot.append(el('a', { onclick: () => openEditor(t, { file: root.file, snap: root.snap, line: root.line, src: root.src }, null, null, root) }, 'reply'));
+  foot.append(el('a', { onclick: () => openEditor(t, { file: root.file, snap: root.snap, line: root.line, src: root.src, msg: root.msg }, null, null, root) }, 'reply'));
   if (isResolved(root)) foot.append(el('a', { onclick: () => { openThreads.delete(root.id); t.replaceWith(threadEl(root)); } }, 'collapse'));
   if (root.file != null && M > 2 && root.snap != null) {
     const f = files[fileIndexByKey(root.file)];
@@ -1543,10 +1593,11 @@ function sortedRoots() {
     const fx = x.file == null ? -1 : (idx.get(x.file) ?? 1e9), fy = y.file == null ? -1 : (idx.get(y.file) ?? 1e9);
     if (fx !== fy) return fx - fy;
     if (x.snap !== y.snap) return (x.snap ?? -1) - (y.snap ?? -1);
+    if (x.msg !== y.msg) return MSGS.indexOf(msgOf(x.msg)) - MSGS.indexOf(msgOf(y.msg));
     return x.line - y.line;
   });
 }
-function locText(cm) { return cm.file == null ? (cm.line ? 'message line ' + cm.line : 'whole commit') : snapName(cm.snap) + ' line ' + cm.line; }
+function locText(cm) { return cm.file == null ? (cm.line ? (cm.msg ? msgOf(cm.msg).short + ' ' : '') + 'message line ' + cm.line : RANGE ? 'whole range' : 'whole commit') : snapName(cm.snap) + ' line ' + cm.line; }
 function renderPanel() {
   const body = $('#pbody'), pf = $('#pfilter'); body.replaceChildren(); pf.replaceChildren();
   const rs = sortedRoots(), nres = rs.filter(isResolved).length;
@@ -1561,7 +1612,7 @@ function renderPanel() {
   if (!shown.length) { body.append(el('div', { id: 'empty' }, rs.length ? 'Nothing ' + ui.filter + '.' : 'No comments yet.')); }
   let lastFile;
   for (const cm of shown) {
-    const fname = cm.file == null ? 'Commit ' + DATA.commit.short : cm.file;
+    const fname = cm.file == null ? (RANGE ? 'Commits ' : 'Commit ') + DATA.commit.short : cm.file;
     if (fname !== lastFile) { body.append(el('h3', null, fname)); lastFile = fname; }
     const pc = el('div', { class: 'pc' + (isResolved(cm) ? ' resolved' : '') + (isNote(cm) ? ' note' : ''), dataset: { id: cm.id } });
     const loc = el('div', { class: 'loc' }, el('a', { onclick: () => jumpTo(cm) }, locText(cm)),
@@ -1604,10 +1655,10 @@ function closePanel() { $('#panel').classList.remove('open'); }
 // to write a replies file ptal can embed: instructions, the reply schema, and
 // the comments as JSON.
 function briefComment(cm) {
-  const o = { id: cm.id, commit: SN[cm.snap == null ? 1 : cm.snap].sha };
+  const o = { id: cm.id, commit: cm.msg || SN[cm.snap == null ? 1 : cm.snap].sha };
   const ctx = (ls, line) => { const c = {}; for (let k = Math.max(0, line - 4); k < Math.min(ls.length, line + 3); k++) c[k + 1] = ls[k]; return c; };
   if (cm.file == null) {
-    if (cm.line) { const c = DATA.commit; o.messageLine = cm.line; o.context = ctx([c.subject, ...(c.body ? ['', ...c.body.split('\n')] : [])], cm.line); }
+    if (cm.line) { o.messageLine = cm.line; o.context = ctx(msgLines(msgOf(cm.msg)), cm.line); }
   } else {
     const f = files[fileIndexByKey(cm.file)];
     o.path = f ? f.paths[cm.snap] || cm.file : cm.file; o.line = cm.line;
@@ -1621,17 +1672,18 @@ function briefComment(cm) {
 function brief() {
   const c = DATA.commit, last = SN[M - 1], rf = 'replies-' + c.short + '-' + M + '.json';   // one file per round, never overwritten
   const rs = sortedRoots().filter(r => r.author === 'reviewer' && !isResolved(r) && !isNote(r));
-  const out = ['# Code review of commit ' + c.short + ': ' + c.subject, '',
-    'A human reviewer has read commit ' + c.sha + (M > 2 ? ', together with the follow-up commit' + (M > 3 ? 's' : '') + ' listed below,' : '') + ' and left comments on specific lines. Your job is to act on each comment: change the code in a new commit, or explain why not. You answer in a JSON file, which the reviewer feeds back into the review page together with your commit, so your replies and the places you changed appear next to the comments they answer.',
+  const what = RANGE ? 'the ' + MSGS.length + ' commit' + (MSGS.length === 1 ? '' : 's') + ' ' + RANGE.spec + ' (reviewed as one change, S0 to S1)' : 'commit ' + c.sha;
+  const out = ['# Code review of ' + (RANGE ? 'commits ' : 'commit ') + c.short + ': ' + c.subject, '',
+    'A human reviewer has read ' + what + (M > 2 ? ', together with the follow-up commit' + (M > 3 ? 's' : '') + ' listed below,' : '') + ' and left comments on specific lines. Your job is to act on each comment: change the code in a new commit, or explain why not. You answer in a JSON file, which the reviewer feeds back into the review page together with your commit, so your replies and the places you changed appear next to the comments they answer.',
     '', 'The review is a sequence of snapshots of the repository:', ''];
-  SN.forEach((s, k) => out.push('- S' + k + ' = ' + s.sha + (k === 0 ? ' (parent of the reviewed commit)' : k === 1 ? ' (the reviewed commit)' : ' (follow-up ' + (k - 1) + ')') + (s.subject ? ': ' + s.subject : '')));
+  SN.forEach((s, k) => out.push('- S' + k + ' = ' + s.sha + (k === 0 ? (RANGE ? ' (start of the reviewed range)' : ' (parent of the reviewed commit)') : k === 1 ? (RANGE ? ' (end of the reviewed range)' : ' (the reviewed commit)') : ' (follow-up ' + (k - 1) + ')') + (s.subject ? ': ' + s.subject : '')));
   out.push('', '## How to respond', '',
     '1. Verify that the currently checked-out branch is at S' + (M - 1) + ': `git rev-parse HEAD` must print `' + last.sha + '`. If it does not, stop and ask the reviewer. Make your changes as one or more new commits on that branch. Never amend, rebase or reset existing commits.',
-    '2. Address every comment in the JSON at the end of this brief. Each comment has an `id`, the full hash of the `commit` it was made against, and a location: `path` and `line` in a file at that commit; or `messageLine`, a 1-based line of that commit\'s message as `git show -s --format=%B` prints it (line 1 is the subject); or neither, for the commit as a whole. `context` holds nearby lines of the file or message, keyed by line number. `text` is the reviewer\'s comment and `replies` are the earlier answers in that thread, oldest first, including yours from previous rounds.',
+    '2. Address every comment in the JSON at the end of this brief. Each comment has an `id`, the full hash of the `commit` it was made against, and a location: `path` and `line` in a file at that commit; or `messageLine`, a 1-based line of that commit\'s message as `git show -s --format=%B` prints it (line 1 is the subject); or neither, for the ' + (RANGE ? 'range' : 'commit') + ' as a whole. `context` holds nearby lines of the file or message, keyed by line number. `text` is the reviewer\'s comment and `replies` are the earlier answers in that thread, oldest first, including yours from previous rounds.',
     '3. Write `' + rf + '` (exactly that name: it is specific to this round, and an earlier round\'s file must not be overwritten) with one entry per comment: `re` is the comment\'s id, `status` is one of fixed, answered, declined or deferred, and `text` says what you changed or why not. When the status is fixed, add `fixedAt`: one or more locations of the fix, each a full `commit` hash (your new commit), a `file` path and a `line` in that file at that commit. An entry with `at` instead of `re` is a note of your own about a location. The file must validate against this JSON schema:', '',
     '```json', JSON.stringify(DATA.replySchema), '```', '',
     '4. Hand back the hash(es) of your new commit(s) and `' + rf + '`. The reviewer then runs:', '',
-    '   `ptal.py ' + c.root + ' ' + c.sha + (M > 2 ? SN.slice(2).map(s => ' --then ' + s.sha).join('') : '') + (DATA.replyFiles || []).map(p => ' --replies ' + p).join('') + ' --then <your commit> --replies ' + rf + '`', '',
+    '   `ptal.py ' + c.root + ' ' + (RANGE ? RANGE.spec : c.sha) + (M > 2 ? SN.slice(2).map(s => ' --then ' + s.sha).join('') : '') + (DATA.replyFiles || []).map(p => ' --replies ' + p).join('') + ' --then <your commit> --replies ' + rf + '`', '',
     '## Comments (' + rs.length + ' unresolved)', '',
     '```json', JSON.stringify({ comments: rs.map(briefComment) }, null, 1), '```', '');
   return out.join('\n');
@@ -1713,7 +1765,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter,
                                  epilog=__doc__.split("\n\n", 1)[1])
     ap.add_argument("root", help="git repository (passed to git -C)")
-    ap.add_argument("commit", help="commit to review (any committish)")
+    ap.add_argument("commit", help="commit to review (any committish), or a range A..B or A...B reviewed as one commit")
     ap.add_argument("--then", action="append", default=[], metavar="COMMITTISH",
                     help="a follow-up commit (repeatable, in order); adds a snapshot")
     ap.add_argument("--replies", action="append", default=[], metavar="FILE",
